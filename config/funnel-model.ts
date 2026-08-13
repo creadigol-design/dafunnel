@@ -67,6 +67,17 @@ export const BLENDED_PLAN: Record<Channel, { volumeIn: number; expectedCloses: n
 };
 
 /**
+ * Channels the system actively drives (schedules touches, drafts copy, throttles
+ * volume). LinkedIn is deliberately excluded — it is Daniel's personal
+ * relationship channel. The governor still COUNTS any LinkedIn-sourced closes
+ * toward the 2/month target (Daniel works it by hand, ~0.3/mo), but never
+ * schedules or drafts on it. If LinkedIn's manual contribution dips, the
+ * governor makes up the gap from reactivation/inbound/cold, not by automating
+ * LinkedIn.
+ */
+export const SYSTEM_MANAGED_CHANNELS: Channel[] = ['inbound', 'reactivation', 'cold'];
+
+/**
  * The target. Plain-English goal is "2 closes/month", but capacity is the real
  * constraint: ~25 deliverable days/month (1 big job OR 2 small). The governor
  * optimises booked/forecast delivery-days and value, not a raw job count — a

@@ -37,8 +37,13 @@ export async function runIngest(): Promise<IngestSummary> {
   const folders: { dir: string; profile: string }[] = [
     { dir: config.ingest.prospects, profile: 'built-list' },
     { dir: config.ingest.reactivation, profile: 'vedri-crm' },
-    { dir: config.ingest.social, profile: 'linkedin' },
   ];
+  // LinkedIn is Daniel's personal channel — not auto-ingested. The `linkedin`
+  // profile stays available for a deliberate one-off `import-csv` if he ever
+  // wants it, but the cycle never scans data/social/ while linkedinManual holds.
+  if (!config.channels.linkedinManual) {
+    folders.push({ dir: config.ingest.social, profile: 'linkedin' });
+  }
   for (const { dir, profile } of folders) {
     for (const file of csvFiles(dir)) {
       try {

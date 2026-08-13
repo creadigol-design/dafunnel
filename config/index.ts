@@ -54,6 +54,17 @@ export interface Config {
   /** HubSpot free-tier ceilings; alert when within 20%. */
   freeTier: { maxContacts: number; alertThreshold: number };
 
+  /** Channel policy. */
+  channels: {
+    /**
+     * LinkedIn is Daniel's personal/professional relationship channel — the
+     * system does NOT ingest connections, draft messages, or schedule touches
+     * on it. `log-touch` stays available if he chooses to pull a specific
+     * conversation into the email funnel by hand.
+     */
+    linkedinManual: boolean;
+  };
+
   /** Universal send windows (UK time). Enforced by the sequence engine. */
   sending: {
     days: readonly number[]; // 0=Sun … 6=Sat; Tue–Thu = [2,3,4]
@@ -102,6 +113,8 @@ export const config: Config = Object.freeze({
   },
 
   freeTier: { maxContacts: 1000, alertThreshold: 0.8 },
+
+  channels: { linkedinManual: bool('LINKEDIN_MANUAL', true) },
 
   sending: {
     days: [2, 3, 4], // Tue, Wed, Thu

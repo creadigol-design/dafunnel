@@ -117,11 +117,12 @@ Five sources, one normalised pipeline, all deduping on email and validated:
   answers go to internal notes, and the derived kit list is never client-facing.
 - **Built lists** — `data/prospects/*.csv` (built-list profile): strict schema,
   validation report, sole-trader/role-account flagging.
-- **LinkedIn** — export your Connections CSV (LinkedIn → Settings → Data privacy
-  → Get a copy of your data → Connections) and drop it in `data/social/`; the
-  `linkedin` profile strips LinkedIn's preamble and imports everyone whose email
-  LinkedIn exposes (it withholds most — the rest are listed as manual-DM
-  candidates). For ongoing DMs, `pnpm run log-touch`. No automation or scraping.
+- **LinkedIn** — *Daniel's personal channel; not automated* (`LINKEDIN_MANUAL=true`).
+  The cycle never ingests connections or drafts LinkedIn messages. If he ever
+  wants to pull a specific conversation into the email funnel by hand, the
+  `linkedin` import profile and `pnpm run log-touch` remain available, but
+  nothing runs on LinkedIn automatically. The governor still counts any
+  LinkedIn-sourced closes toward the target — it just never schedules them.
 - **Reactivation** — `data/reactivation/*.csv` (vedri-crm profile), segmented
   worked-with-us / quoted-but-lost / enquired-never-quoted. Worked first.
 - **Mailchimp** — website opt-ins (consent basis); live pull pending connector auth.
