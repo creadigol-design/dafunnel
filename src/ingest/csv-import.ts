@@ -11,9 +11,10 @@ import { basename } from 'node:path';
 import { parse } from 'csv-parse/sync';
 import type { LeadSource } from '../types.js';
 import { recordEvent } from '../db/events.js';
-import { upsertLead } from '../db/leads.js';
+import { upsertLead, getLeadByEmail } from '../db/leads.js';
 import { normaliseRawLead } from './normalise.js';
 import { dedupeByEmail } from './dedupe.js';
+import { applySignal } from '../scoring.js';
 import { emptyReport, type ImportReport, type LeadDraft, type RawLead } from './model.js';
 
 type Record_ = Record<string, string>;
@@ -21,6 +22,25 @@ export interface CsvProfile {
   toRaw(rec: Record_, rowNum: number): RawLead;
   /** Optional clean-up of raw file text before parsing (e.g. LinkedIn preamble). */
   preprocess?(content: string): string;
+  /**
+   * Optional warm-start: points to seed from a lead's original stage, so a
+   * mid-conversation reactivation lead carries on from where it was rather than
+   * starting ice-cold. Return 0 for no warm start.
+   */
+  warmStartPoints?(rec: Record_): number;
+}
+
+/** Map an original CRM stage to warm-start points (reactivation). */
+export function warmStartFromStage(stage: string | undefined): number {
+  const s = (stage ?? '').toLowerCase();
+  if (!s || s.includes('won') || s.includes('lost')) return 0;
+  if (s.includes('negotiat')) return 52; // deep in — one signal from Hot
+  if (s.includes('proposal')) return 45;
+  if (s.includes('discovery')) return 40;
+  if (s.includes('connection') || s.includes('connected') || s.includes('engaged')) return 30;
+  if (s.includes('on hold') || s.includes('hold')) return 25;
+  if (s.includes('initial') || s.includes('reach') || s.includes('contacted')) return 18;
+  return 0;
 }
 
 const MONTHS: Record<string, number> = {
@@ -83,16 +103,21 @@ export const PROFILES: Record<string, CsvProfile> = {
       const stage = col(rec, 'STAGE');
       const note = col(rec, 'NOTE');
       const phone = col(rec, 'PHONE');
-      const notes = [
-        where ? `Met: ${where}` : null,
-        stage ? `Original stage: ${stage}` : null,
-        phone ? `Phone: ${phone}` : null,
-        note ? note : null,
-      ].filter(Boolean);
       const dates = ['INITIAL CONTACT', 'DISCOVERY CALL', 'FOLLOW UP']
         .map((k) => parseUkDate(col(rec, k)))
         .filter((d): d is string => Boolean(d))
         .sort();
+      const lastContact = dates.length ? dates[dates.length - 1]!.slice(0, 10) : undefined;
+      const notes = [
+        where ? `Met: ${where}` : null,
+        stage ? `Original stage: ${stage}` : null,
+        lastContact ? `Last contact: ${lastContact}` : null,
+        phone ? `Phone: ${phone}` : null,
+        note ? note : null,
+      ].filter(Boolean);
+      // Historical contact dates live in notes as context — NOT in
+      // lastEngagementAt, so the funnel's decay clock starts when we re-engage
+      // (warm_start), not months in the past.
       return {
         email: col(rec, 'EMAIL'),
         fullName: col(rec, 'NAME'),
@@ -100,10 +125,12 @@ export const PROFILES: Record<string, CsvProfile> = {
         phone,
         source: mapVedriSource(col(rec, 'SOURCE')),
         internalNotes: notes.length ? notes.join(' · ') : undefined,
-        lastEngagementAt: dates.length ? dates[dates.length - 1]! : undefined,
         provenance: where,
         raw: rec,
       };
+    },
+    warmStartPoints(rec) {
+      return warmStartFromStage(col(rec, 'STAGE'));
     },
   },
 
@@ -179,6 +206,7 @@ export function importCsv(path: string, profileName: keyof typeof PROFILES | str
 
   const report = emptyReport(String(profileName), path);
   const drafts: LeadDraft[] = [];
+  const warmPointsByEmail = new Map<string, number>();
 
   records.forEach((rec, i) => {
     const rowNum = i + 2; // header is row 1
@@ -192,6 +220,10 @@ export function importCsv(path: string, profileName: keyof typeof PROFILES | str
     for (const w of n.warnings) report.warnings.push({ row: rowNum, email: n.draft.email, reason: w });
     if (n.roleAccount) report.roleAccounts.push(n.draft.email);
     if (n.needsConsent) report.needsConsent.push(n.draft.email);
+    if (profile.warmStartPoints) {
+      const pts = profile.warmStartPoints(rec);
+      if (pts > 0) warmPointsByEmail.set(n.draft.email, pts);
+    }
     drafts.push(n.draft);
   });
 
@@ -199,6 +231,9 @@ export function importCsv(path: string, profileName: keyof typeof PROFILES | str
   report.duplicatesInFile = duplicates;
 
   for (const draft of unique) {
+    // Historical context notes are set once on creation. On re-import, preserve
+    // whatever's there (HubSpot may own it) so import and reconcile don't churn.
+    if (getLeadByEmail(draft.email)) delete draft.internalNotes;
     const lead = upsertLead(draft);
     report.imported++;
     report.bySource[lead.source] = (report.bySource[lead.source] ?? 0) + 1;
@@ -209,6 +244,17 @@ export function importCsv(path: string, profileName: keyof typeof PROFILES | str
       reason: `Imported from ${basename(path)} (source ${lead.source})`,
       data: { needsConsent: draft.needsConsent ?? false },
     });
+    // Warm-start (idempotent): seed points from the original stage and anchor
+    // the decay clock to re-engagement (engagement:true) so it starts warm now.
+    const warmPts = warmPointsByEmail.get(lead.email);
+    if (warmPts) {
+      applySignal(lead.id, 'warm_start', {
+        trigger: 'reactivation-warm-start',
+        points: warmPts,
+        idempotencyKey: 'seed:warm_start',
+        reason: `Warm start (+${warmPts}) from original stage`,
+      });
+    }
   }
 
   return report;

@@ -150,6 +150,10 @@ the whole derivation).
 - **Transitions:** negative reply → Nurture (90-day quiet, floor 15); hard
   no/unsubscribe → Suppressed (permanent, added to the suppression list); hard
   bounce → Disqualified. Terminal states are never re-scored.
+- **Warm-start:** reactivation leads seed a starting score from their original
+  stage (Negotiating +52, Proposal +45, … Initial reach-out +18), with the decay
+  clock anchored to re-engagement — so a mid-conversation lead carries on from
+  where it was rather than starting ice-cold.
 
 ## How to change copy
 

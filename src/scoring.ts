@@ -36,7 +36,8 @@ export type PositiveSignal =
   | 'named_budget_or_date'
   | 'forwarded_cc'
   | 'icp_fit_bonus'
-  | 'prior_client';
+  | 'prior_client'
+  | 'warm_start'; // reactivation: carry warmth from a lead's original stage
 
 export const SIGNAL_POINTS: Record<PositiveSignal, number> = {
   email_opened: 4,
@@ -54,6 +55,7 @@ export const SIGNAL_POINTS: Record<PositiveSignal, number> = {
   forwarded_cc: 15,
   icp_fit_bonus: 10,
   prior_client: 15,
+  warm_start: 0, // points supplied per-lead via the points override (stage-derived)
 };
 
 export type TerminalTransition =
@@ -212,6 +214,8 @@ export interface ApplySignalOptions {
   reason?: string;
   /** Stable key for one-time signals; re-applying with the same key is a no-op. */
   idempotencyKey?: string;
+  /** Override the signal's default point value (used by warm_start). */
+  points?: number;
   asOf?: Date;
   /**
    * Whether this signal counts as engagement and resets the decay clock
@@ -229,7 +233,7 @@ export function applySignal(
 ): ScoreResult | null {
   if (opts.idempotencyKey && signalAlreadyApplied(leadId, opts.idempotencyKey)) return null;
   const asOf = opts.asOf ?? new Date();
-  const points = SIGNAL_POINTS[signal];
+  const points = opts.points ?? SIGNAL_POINTS[signal];
   recordEvent({
     leadId,
     type: 'score.signal',

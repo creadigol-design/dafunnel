@@ -12,7 +12,7 @@ import {
 } from '../src/ingest/normalise.js';
 import { dedupeByEmail } from '../src/ingest/dedupe.js';
 import { parseFormSubmit, submissionToRawLead } from '../src/ingest/inbound.js';
-import { parseUkDate, parseLinkedInDate, PROFILES } from '../src/ingest/csv-import.js';
+import { parseUkDate, parseLinkedInDate, PROFILES, warmStartFromStage } from '../src/ingest/csv-import.js';
 import { classifyReactivation } from '../src/ingest/reactivation.js';
 import { makeLead } from './fixtures.js';
 
@@ -176,6 +176,22 @@ describe('LinkedIn profile', () => {
     expect(raw.company).toBe('Northlight Films');
     expect(raw.internalNotes).toContain('Role: Producer');
     expect(raw.lastEngagementAt).toBe('2024-06-15T00:00:00.000Z');
+  });
+});
+
+describe('warm-start from original stage', () => {
+  it('seeds more points the deeper the original conversation was', () => {
+    expect(warmStartFromStage('Negotiating')).toBe(52);
+    expect(warmStartFromStage('Proposal Sent')).toBe(45);
+    expect(warmStartFromStage('Connection')).toBe(30);
+    expect(warmStartFromStage('On Hold')).toBe(25);
+    expect(warmStartFromStage('Initial Reach out')).toBe(18);
+  });
+  it('gives no warm start to closed or unknown stages', () => {
+    expect(warmStartFromStage('Closed Won')).toBe(0);
+    expect(warmStartFromStage('Closed Lost')).toBe(0);
+    expect(warmStartFromStage('')).toBe(0);
+    expect(warmStartFromStage(undefined)).toBe(0);
   });
 });
 
