@@ -9,7 +9,10 @@ Prepared 2026-08-13. Success metric: **2 closed jobs / month, combined across bo
 - **Discovery calls:** Mon–Fri **10:00–16:00** → call-slot offers pull live from the "Vedri" calendar within that window (Europe/London).
 - **Past quotes:** live in **Google Drive** — confirmed a "Vedri Quotes" folder + named quotes/proposals (Pwrpas VED-Q-002, Our World, OnEarth, Business Wales, Y Streic Fawr VFX, Sgorio, +others). **~6+ warm reactivation contacts** to work first.
 - **Project value:** **£7,000–£20,000** per job (midpoint ≈ £13.5k → 2 closes ≈ £27k/mo). Used for pipeline weighting + cost-per-close.
-- **Capacity:** "depends on scope of work" — **still needs a working ceiling** (jobs/month per track) so the governor knows when to throttle vs push. Flagged.
+- **Capacity:** **≈ 25 delivery-days / month** — either **1 big job (~25 shoot days)** *or* **2 small jobs (~7 days each)**. Crew is **elastic** (roster to scale up/down), so crew is *not* the binding constraint — **Daniel's time + stage-days are.**
+- **ICP scope:** **Dublin / Ireland stays in.** Client company-size band: not a hard filter (crew scales to the job); ICP-fit keys on sector + travel radius + shoot profile instead.
+
+> **⚠️ Design refinement — the target and the capacity can conflict.** The headline metric is "2 closes/month", but capacity is "1 big *or* 2 small". A single £20k 25-day job satisfies the month's revenue yet counts as **one** close. So the **governor measures booked/forecast _delivery-days_ and _value_, not just a job count** — "on pace" = pipeline that *fills ~25 delivery-days at £7–20k*, and it throttles prospecting the moment booked days approach the ceiling (a full studio + more cold email = the worse problem the brief warns about). "2 closes" stays the plain-English goal; delivery-days + value is what the maths actually optimises.
 - **Cold sending domain:** not purchased yet → I'll spec the DNS (SPF/DKIM/DMARC) for Daniel to set up; warming starts once it's live.
 - **Slack channel:** to be created — recommendation below.
 
@@ -144,10 +147,10 @@ Build effort ≈ **3–4 focused weeks** before the dry run; the dry run and dom
 
 **Slack recommendation:** one channel **`#vedri-funnel`** for the daily digest, weekly pace report, and band-change notices; **urgent alerts** (new inbound, HOT lead, positive reply, deal won, system failure) also fire as a **direct DM** to Daniel so they break through the 6/day rate limit. Confirm the workspace and I'll wire it in Phase 7.
 
-**Still genuinely open:**
-1. **Capacity ceiling** — a real number of deliverable jobs/month per track (or a rule of thumb by scope). Without it the governor can't tell "behind pace" from "already full". *"Depends on scope" is fine as long as you give me a floor and a ceiling.*
-2. **ICP corrections** — company size band (crew/turnover), sectors to exclude, Dublin/ROI in or out.
-3. **HubSpot regional settings** — OK to fix currency→GBP and timezone→Europe/London? (You change it in HubSpot settings; I can't via API.)
+**Still open (none blocks Phase 1 scaffolding — needed by Phase 2/3):**
+1. **Sectors to exclude** — any industries/clients you *don't* want the system prospecting? (Everything else about ICP is now settled: capacity, elastic crew, Dublin in.)
+2. **HubSpot regional settings** — OK to fix currency→GBP and timezone→Europe/London? (You change it in HubSpot settings; I can't via API.)
+3. **Slack workspace** — confirm the workspace for `#vedri-funnel`.
 
 ### Original question list (for reference)
 
