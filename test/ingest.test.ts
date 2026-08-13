@@ -12,7 +12,7 @@ import {
 } from '../src/ingest/normalise.js';
 import { dedupeByEmail } from '../src/ingest/dedupe.js';
 import { parseFormSubmit, submissionToRawLead } from '../src/ingest/inbound.js';
-import { parseUkDate } from '../src/ingest/csv-import.js';
+import { parseUkDate, parseLinkedInDate, PROFILES } from '../src/ingest/csv-import.js';
 import { classifyReactivation } from '../src/ingest/reactivation.js';
 import { makeLead } from './fixtures.js';
 
@@ -143,6 +143,39 @@ describe('parseUkDate', () => {
     expect(parseUkDate('01-01-26')).toBeNull(); // placeholder
     expect(parseUkDate('')).toBeNull();
     expect(parseUkDate('garbage')).toBeNull();
+  });
+});
+
+describe('LinkedIn profile', () => {
+  it('parses LinkedIn connected-on dates', () => {
+    expect(parseLinkedInDate('15 Jun 2024')).toBe('2024-06-15T00:00:00.000Z');
+    expect(parseLinkedInDate('2 Mar 2025')).toBe('2025-03-02T00:00:00.000Z');
+    expect(parseLinkedInDate('')).toBeNull();
+  });
+
+  it('strips the notes preamble before the header row', () => {
+    const raw = `Notes:\n"blah blah privacy note"\n\nFirst Name,Last Name,URL,Email Address,Company,Position,Connected On\nAlys,Morgan,url,alys@x.co.uk,Northlight,Producer,15 Jun 2024`;
+    const cleaned = PROFILES.linkedin!.preprocess!(raw);
+    expect(cleaned.startsWith('First Name,')).toBe(true);
+  });
+
+  it('maps a connection row to a LinkedIn-source RawLead with role in notes', () => {
+    const raw = PROFILES.linkedin!.toRaw(
+      {
+        'First Name': 'Alys',
+        'Last Name': 'Morgan',
+        'Email Address': 'alys@northlightfilms.co.uk',
+        Company: 'Northlight Films',
+        Position: 'Producer',
+        'Connected On': '15 Jun 2024',
+        URL: 'https://linkedin.com/in/alysmorgan',
+      },
+      2,
+    );
+    expect(raw.source).toBe('LinkedIn');
+    expect(raw.company).toBe('Northlight Films');
+    expect(raw.internalNotes).toContain('Role: Producer');
+    expect(raw.lastEngagementAt).toBe('2024-06-15T00:00:00.000Z');
   });
 });
 

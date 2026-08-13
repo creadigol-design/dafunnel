@@ -37,7 +37,7 @@ export async function runIngest(): Promise<IngestSummary> {
   const folders: { dir: string; profile: string }[] = [
     { dir: config.ingest.prospects, profile: 'built-list' },
     { dir: config.ingest.reactivation, profile: 'vedri-crm' },
-    { dir: config.ingest.social, profile: 'built-list' },
+    { dir: config.ingest.social, profile: 'linkedin' },
   ];
   for (const { dir, profile } of folders) {
     for (const file of csvFiles(dir)) {

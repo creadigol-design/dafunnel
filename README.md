@@ -117,8 +117,11 @@ Five sources, one normalised pipeline, all deduping on email and validated:
   answers go to internal notes, and the derived kit list is never client-facing.
 - **Built lists** — `data/prospects/*.csv` (built-list profile): strict schema,
   validation report, sole-trader/role-account flagging.
-- **LinkedIn** — `pnpm run log-touch` + a watched `data/social/` folder. No
-  automation or scraping.
+- **LinkedIn** — export your Connections CSV (LinkedIn → Settings → Data privacy
+  → Get a copy of your data → Connections) and drop it in `data/social/`; the
+  `linkedin` profile strips LinkedIn's preamble and imports everyone whose email
+  LinkedIn exposes (it withholds most — the rest are listed as manual-DM
+  candidates). For ongoing DMs, `pnpm run log-touch`. No automation or scraping.
 - **Reactivation** — `data/reactivation/*.csv` (vedri-crm profile), segmented
   worked-with-us / quoted-but-lost / enquired-never-quoted. Worked first.
 - **Mailchimp** — website opt-ins (consent basis); live pull pending connector auth.

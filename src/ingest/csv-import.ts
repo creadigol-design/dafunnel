@@ -19,6 +19,23 @@ import { emptyReport, type ImportReport, type LeadDraft, type RawLead } from './
 type Record_ = Record<string, string>;
 export interface CsvProfile {
   toRaw(rec: Record_, rowNum: number): RawLead;
+  /** Optional clean-up of raw file text before parsing (e.g. LinkedIn preamble). */
+  preprocess?(content: string): string;
+}
+
+const MONTHS: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/** Parse LinkedIn's "15 Jun 2024" connected-on date to ISO. */
+export function parseLinkedInDate(v: string | undefined): string | null {
+  if (!v) return null;
+  const m = v.trim().match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
+  if (!m) return null;
+  const month = MONTHS[m[2]!.slice(0, 3).toLowerCase()];
+  if (!month) return null;
+  return `${m[3]}-${String(month).padStart(2, '0')}-${m[1]!.padStart(2, '0')}T00:00:00.000Z`;
 }
 
 /** Case-insensitive column lookup across candidate header names. */
@@ -90,6 +107,39 @@ export const PROFILES: Record<string, CsvProfile> = {
     },
   },
 
+  // LinkedIn "Connections.csv" export. Note: LinkedIn withholds the email for
+  // most connections, so many rows land in the rejected list (no email) — those
+  // are manual-DM candidates, logged via `pnpm run log-touch`.
+  linkedin: {
+    preprocess(content) {
+      // LinkedIn prepends a few "Notes:" lines before the real header row.
+      const lines = content.split(/\r?\n/);
+      const headerIdx = lines.findIndex((l) => /^"?First Name"?,/i.test(l));
+      return headerIdx > 0 ? lines.slice(headerIdx).join('\n') : content;
+    },
+    toRaw(rec, _rowNum) {
+      const position = col(rec, 'Position', 'Title');
+      const url = col(rec, 'URL', 'Profile URL');
+      const connectedOn = col(rec, 'Connected On');
+      const notes = [
+        position ? `Role: ${position}` : null,
+        url ? `LinkedIn: ${url}` : null,
+        connectedOn ? `Connected: ${connectedOn}` : null,
+      ].filter(Boolean);
+      return {
+        email: col(rec, 'Email Address', 'email'),
+        firstName: col(rec, 'First Name'),
+        lastName: col(rec, 'Last Name'),
+        company: col(rec, 'Company', 'Organization'),
+        source: 'LinkedIn',
+        internalNotes: notes.length ? notes.join(' · ') : undefined,
+        lastEngagementAt: parseLinkedInDate(connectedOn) ?? undefined,
+        provenance: 'LinkedIn connection export',
+        raw: rec,
+      };
+    },
+  },
+
   'built-list': {
     toRaw(rec, _rowNum) {
       const track = col(rec, 'track');
@@ -117,7 +167,8 @@ export function importCsv(path: string, profileName: keyof typeof PROFILES | str
   const profile = PROFILES[profileName];
   if (!profile) throw new Error(`Unknown CSV profile: ${profileName}. Known: ${Object.keys(PROFILES).join(', ')}`);
 
-  const content = readFileSync(path, 'utf8');
+  const rawContent = readFileSync(path, 'utf8');
+  const content = profile.preprocess ? profile.preprocess(rawContent) : rawContent;
   const records = parse(content, {
     columns: true,
     trim: true,
