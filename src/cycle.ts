@@ -17,6 +17,7 @@ import { log } from './logger.js';
 import { db, closeDb } from './db/index.js';
 import { syncHubSpot } from './hubspot/sync.js';
 import { runIngest } from './ingest/index.js';
+import { runScoring } from './scoring.js';
 
 const clog = log.child('cycle');
 
@@ -65,7 +66,17 @@ const STEPS: Step[] = [
       };
     },
   },
-  step('score-and-decay', 'Phase 4: recompute scores, apply -3/7d decay, band transitions'),
+  {
+    name: 'score-and-decay',
+    run: async () => {
+      const s = runScoring();
+      return {
+        name: 'score-and-decay',
+        status: 'ok',
+        counts: { scored: s.scored, bandChanges: s.bandChanges, hot: s.hot },
+      };
+    },
+  },
   step('sequence-and-draft', 'Phase 5: advance sequences, generate + lint drafts'),
   step('replies', 'Phase 6: poll mailboxes, classify, route, book calls'),
   step('governor', 'Phase 7: project pace vs target, recommend volume changes'),

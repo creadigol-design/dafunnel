@@ -132,6 +132,25 @@ role inboxes, and freemail/individual addresses flagged as needing consent
 (these are never cold-mailed). Drop a CSV in the right folder and it's picked up
 on the next `pnpm run cycle`, or import one on demand with `pnpm run import-csv`.
 
+## Scoring (Phase 4)
+
+A lead's score is a **pure function of its event log and the clock**:
+`score = clamp(sum(positive signals) − decay)`, where decay is −3 points per full
+7 days since the last engagement. Nothing sets a score directly — signals and
+transitions are recorded as events and the score is recomputed from them, so it's
+idempotent, replayable, and fully explainable (`pnpm run explain <email>` shows
+the whole derivation).
+
+- **Bands:** Cold 0–24 · Warm 25–54 · Hot 55–100, plus terminal Closed Won/Lost,
+  Suppressed, Disqualified, and sticky Nurture (floor 15). **Every band change
+  queues an alert**; crossing into Hot is urgent.
+- **Signals** (additive): reply positive +35, discovery booked +40, asked for
+  quote +30, decision-matrix completed +30, proposal sent +20, … down to email
+  opened +4. One-time signals (ICP fit +10, prior client +15) are idempotent.
+- **Transitions:** negative reply → Nurture (90-day quiet, floor 15); hard
+  no/unsubscribe → Suppressed (permanent, added to the suppression list); hard
+  bounce → Disqualified. Terminal states are never re-scored.
+
 ## How to change copy
 
 Sequences will be declared in `sequences/*.yaml` (Phase 5) so copy can be edited
