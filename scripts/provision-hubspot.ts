@@ -42,6 +42,13 @@ function propertyPayload(def: PropertyDef, groupName: string): Record<string, un
   if (def.spec.type === 'enumeration') {
     base.options = def.spec.options.map((label, i) => ({ label, value: label, displayOrder: i }));
   }
+  if (def.spec.type === 'bool') {
+    // HubSpot requires exactly two options for boolean properties.
+    base.options = [
+      { label: 'Yes', value: 'true', displayOrder: 0 },
+      { label: 'No', value: 'false', displayOrder: 1 },
+    ];
+  }
   return base;
 }
 
@@ -139,7 +146,7 @@ async function runSmoketest(client: HubSpotClient): Promise<void> {
   try {
     for (let i = 1; i <= 5; i++) {
       const c = await client.createContact({
-        email: `vedri-dummy-${i}@example.invalid`,
+        email: `vedri-smoketest-${i}@example.com`,
         firstname: `Dummy${i}`,
         lastname: 'Test',
         company: `Test Co ${i}`,
@@ -155,7 +162,7 @@ async function runSmoketest(client: HubSpotClient): Promise<void> {
     clog.info('smoketest: created', { ids: created });
 
     // Read one back to confirm the vedri_ fields round-trip.
-    const check = await client.searchContactByEmail('vedri-dummy-1@example.invalid', [
+    const check = await client.searchContactByEmail('vedri-smoketest-1@example.com', [
       'email',
       'vedri_track',
       'vedri_score',
