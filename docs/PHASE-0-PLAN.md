@@ -147,10 +147,12 @@ Build effort ≈ **3–4 focused weeks** before the dry run; the dry run and dom
 
 **Slack recommendation:** one channel **`#vedri-funnel`** for the daily digest, weekly pace report, and band-change notices; **urgent alerts** (new inbound, HOT lead, positive reply, deal won, system failure) also fire as a **direct DM** to Daniel so they break through the 6/day rate limit. Confirm the workspace and I'll wire it in Phase 7.
 
-**Still open (none blocks Phase 1 scaffolding — needed by Phase 2/3):**
-1. **Sectors to exclude** — any industries/clients you *don't* want the system prospecting? (Everything else about ICP is now settled: capacity, elastic crew, Dublin in.)
-2. **HubSpot regional settings** — OK to fix currency→GBP and timezone→Europe/London? (You change it in HubSpot settings; I can't via API.)
-3. **Slack workspace** — confirm the workspace for `#vedri-funnel`.
+**All resolved (2026-08-13):**
+1. **Sectors to exclude** — *none.* Prospect the **full ICP**.
+2. **HubSpot regional settings** — **done** by Daniel (currency → GBP, timezone → Europe/London).
+3. **Slack** — **confirmed:** `#vedri-funnel` for digests/pace/band-changes + urgent DMs.
+
+*Phase 0 gate fully cleared. Awaiting Daniel's explicit "go" to begin Phase 1.*
 
 ### Original question list (for reference)
 
