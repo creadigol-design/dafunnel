@@ -12,6 +12,7 @@
  */
 import { config } from '../config/index.js';
 import { db, closeDb } from '../src/db/index.js';
+import { HubSpotClient } from '../src/hubspot/client.js';
 
 type CheckStatus = 'ok' | 'warn' | 'fail' | 'todo';
 interface Check {
@@ -26,7 +27,7 @@ function checkSecretPresent(name: string, value: string, phase: string): Check {
     : { name, status: 'todo', detail: `not set yet (needed by ${phase})` };
 }
 
-function run(): Check[] {
+async function run(): Promise<Check[]> {
   const checks: Check[] = [];
 
   // Safety flags — surface them loudly so their state is never a surprise.
@@ -85,6 +86,25 @@ function run(): Check[] {
     });
   }
 
+  // Live HubSpot contact count vs free-tier ceiling (only when a token exists).
+  if (config.hubspot.token) {
+    try {
+      const total = await new HubSpotClient().contactCount();
+      const ceiling = config.freeTier.maxContacts * config.freeTier.alertThreshold;
+      checks.push({
+        name: 'HubSpot live contact count',
+        status: total >= ceiling ? 'warn' : 'ok',
+        detail: `${total} / ${config.freeTier.maxContacts} (warn at ${ceiling})`,
+      });
+    } catch (err) {
+      checks.push({
+        name: 'HubSpot live contact count',
+        status: 'fail',
+        detail: `token set but query failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+
   // Credential presence (not validity — that needs the live phases).
   checks.push(checkSecretPresent('HubSpot token', config.hubspot.token, 'Phase 2'));
   checks.push(checkSecretPresent('Google refresh token', config.google.refreshToken, 'Phase 5/6'));
@@ -101,7 +121,7 @@ function run(): Check[] {
 }
 
 const ICON: Record<CheckStatus, string> = { ok: '✓', warn: '⚠', fail: '✗', todo: '·' };
-const checks = run();
+const checks = await run();
 closeDb();
 
 console.log('\nvedrí funnel — doctor\n');

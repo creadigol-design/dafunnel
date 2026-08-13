@@ -9,6 +9,7 @@
   },
   "scripts": {
     "cycle": "tsx src/cycle.ts",
+    "provision-hubspot": "tsx scripts/provision-hubspot.ts",
     "doctor": "tsx scripts/doctor.ts",
     "explain": "tsx scripts/explain.ts",
     "typecheck": "tsc --noEmit",

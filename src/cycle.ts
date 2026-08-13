@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from '../config/index.js';
 import { log } from './logger.js';
 import { db, closeDb } from './db/index.js';
+import { syncHubSpot } from './hubspot/sync.js';
 
 const clog = log.child('cycle');
 
@@ -35,7 +36,24 @@ type Step = { name: string; run: () => Promise<StepResult> };
  */
 const STEPS: Step[] = [
   step('ingest', 'Phase 3: pull inbound, built lists, LinkedIn logs, reactivation'),
-  step('reconcile-hubspot', 'Phase 2: bidirectional sync + conflict reconciliation'),
+  {
+    name: 'reconcile-hubspot',
+    run: async () => {
+      const s = await syncHubSpot();
+      return {
+        name: 'reconcile-hubspot',
+        status: s.skipped ? 'skipped' : 'ok',
+        counts: {
+          reconciled: s.reconciled,
+          created: s.created,
+          wouldCreate: s.wouldCreate,
+          wouldUpdate: s.wouldUpdate,
+          humanOverrides: s.humanOverrides,
+        },
+        ...(s.skipped ? { note: 'HUBSPOT_PRIVATE_APP_TOKEN not set' } : {}),
+      };
+    },
+  },
   step('score-and-decay', 'Phase 4: recompute scores, apply -3/7d decay, band transitions'),
   step('sequence-and-draft', 'Phase 5: advance sequences, generate + lint drafts'),
   step('replies', 'Phase 6: poll mailboxes, classify, route, book calls'),

@@ -56,11 +56,37 @@ pnpm test              # unit + smoke tests
 No secrets are required to run Phase 1 — it touches no live system. Later phases
 assert the specific credentials they need at the point of use.
 
+## HubSpot setup (Phase 2)
+
+HubSpot is the system of record. Provisioning the `vedri_` schema and all live
+sync run through a **Private App token** (REST API v3) — the deployed cron has no
+access to the interactive HubSpot connector, so it uses its own token.
+
+1. HubSpot → Settings → Integrations → **Private Apps → Create a private app**,
+   name it "vedrí Funnel Engine".
+2. Grant CRM read/write scopes for contacts, deals, companies, plus schema and
+   deal-pipeline scopes (the provision script lists them if the token is absent).
+3. Put the token in `.env` as `HUBSPOT_PRIVATE_APP_TOKEN=…`.
+4. Provision + verify:
+   ```bash
+   pnpm run provision-hubspot -- --plan       # dry preview, no writes
+   pnpm run provision-hubspot -- --smoketest   # provision, then create/read/DELETE 5 dummy contacts
+   ```
+
+**Free-tier design note:** HubSpot free CRM allows **one** deal pipeline (verified
+against the portal). Rather than depend on a paid tier, we run a single pipeline
+with our 10 stages and split **Studio vs VFX with the `vedri_track` property**. If
+the account is ever upgraded to Sales Hub Starter+, set
+`HUBSPOT_SEPARATE_PIPELINES=true` to provision two. Sync is **bidirectional**:
+HubSpot wins on human-edited fields (name, company, track, source, notes), we win
+on machine fields (score, temperature, sequence position, suppression).
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `pnpm run cycle` | One pass of the funnel: ingest → reconcile → score → sequence → replies → governor → alerts → dashboard. Steps light up as their phases land. |
+| `pnpm run provision-hubspot` | Idempotently create the `vedri_` schema + pipeline stages. `-- --plan` previews; `-- --smoketest` runs the 5-dummy-contact test. |
 | `pnpm run doctor` | Health check: safety flags, DB, last cycle, suppression list, free-tier headroom, credential presence. |
 | `pnpm run explain <email>` | Full event history + score derivation for one lead — answers "why is this hot?" |
 | `pnpm run typecheck` | `tsc --noEmit`. |
