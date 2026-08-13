@@ -13,6 +13,7 @@
  * concern (Phase 3), not sync.
  */
 import { config } from '../../config/index.js';
+import type { Lead } from '../types.js';
 import { log } from '../logger.js';
 import { recordEvent } from '../db/events.js';
 import { setSyncState } from '../db/index.js';
@@ -39,6 +40,7 @@ export interface SyncSummary {
   wouldCreate: number;
   wouldUpdate: number;
   humanOverrides: number;
+  failed: number;
   skipped: boolean;
 }
 
@@ -49,6 +51,7 @@ export async function syncHubSpot(client = new HubSpotClient()): Promise<SyncSum
     wouldCreate: 0,
     wouldUpdate: 0,
     humanOverrides: 0,
+    failed: 0,
     skipped: false,
   };
 
@@ -62,6 +65,29 @@ export async function syncHubSpot(client = new HubSpotClient()): Promise<SyncSum
   slog.info('sync starting', { leads: leads.length, dryRun: config.dryRun });
 
   for (const lead of leads) {
+    try {
+      await syncOne(client, lead, summary);
+    } catch (err) {
+      summary.failed++;
+      const message = err instanceof Error ? err.message : String(err);
+      slog.error('lead sync failed', { email: lead.email, error: message });
+      recordEvent({
+        leadId: lead.id,
+        type: 'sync.failed',
+        trigger: 'hubspot-sync',
+        reason: `Sync failed: ${message}`,
+      });
+      // Continue: one bad record must not abort the batch.
+    }
+  }
+
+  setSyncState('hubspot.last_sync_at', new Date().toISOString());
+  slog.info('sync finished', { ...summary });
+  return summary;
+}
+
+async function syncOne(client: HubSpotClient, lead: Lead, summary: SyncSummary): Promise<void> {
+  {
     const remote = await client.searchContactByEmail(lead.email, READ_PROPERTIES);
 
     if (remote) {
@@ -100,8 +126,4 @@ export async function syncHubSpot(client = new HubSpotClient()): Promise<SyncSum
       }
     }
   }
-
-  setSyncState('hubspot.last_sync_at', new Date().toISOString());
-  slog.info('sync finished', { ...summary });
-  return summary;
 }
