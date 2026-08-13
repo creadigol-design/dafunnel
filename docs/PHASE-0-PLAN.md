@@ -3,6 +3,16 @@
 **Status: awaiting Daniel's approval. Nothing has been built or deployed.**
 Prepared 2026-08-13. Success metric: **2 closed jobs / month, combined across both tracks.**
 
+### Answers from Daniel (2026-08-13)
+- **Decision-matrix form** → submits to `info@vedri.studio` (same inbox as the VFX form). Good — one inbound poller covers both.
+- **Draft-approval windows:** Mon / Wed / Fri **09:00–11:00** (≈6 hrs/week). → Daily digest must land **before 09:00** on those days with drafts queued. Send windows are Tue–Thu, so: **Mon approval feeds Tue sends; Wed approval feeds Wed+Thu sends;** Fri session handles reactivation/inbound replies.
+- **Discovery calls:** Mon–Fri **10:00–16:00** → call-slot offers pull live from the "Vedri" calendar within that window (Europe/London).
+- **Past quotes:** live in **Google Drive** — confirmed a "Vedri Quotes" folder + named quotes/proposals (Pwrpas VED-Q-002, Our World, OnEarth, Business Wales, Y Streic Fawr VFX, Sgorio, +others). **~6+ warm reactivation contacts** to work first.
+- **Project value:** **£7,000–£20,000** per job (midpoint ≈ £13.5k → 2 closes ≈ £27k/mo). Used for pipeline weighting + cost-per-close.
+- **Capacity:** "depends on scope of work" — **still needs a working ceiling** (jobs/month per track) so the governor knows when to throttle vs push. Flagged.
+- **Cold sending domain:** not purchased yet → I'll spec the DNS (SPF/DKIM/DMARC) for Daniel to set up; warming starts once it's live.
+- **Slack channel:** to be created — recommendation below.
+
 ---
 
 ## 1. What already exists (honest findings)
@@ -128,7 +138,18 @@ Build effort ≈ **3–4 focused weeks** before the dry run; the dry run and dom
 
 ---
 
-## 7. Questions I need answered before Phase 1
+## 7. Questions — status
+
+**Resolved (see "Answers from Daniel" above):** form destination, approval hours, call hours, quotes location, project value, cold domain (not bought), Slack (recommendation below).
+
+**Slack recommendation:** one channel **`#vedri-funnel`** for the daily digest, weekly pace report, and band-change notices; **urgent alerts** (new inbound, HOT lead, positive reply, deal won, system failure) also fire as a **direct DM** to Daniel so they break through the 6/day rate limit. Confirm the workspace and I'll wire it in Phase 7.
+
+**Still genuinely open:**
+1. **Capacity ceiling** — a real number of deliverable jobs/month per track (or a rule of thumb by scope). Without it the governor can't tell "behind pace" from "already full". *"Depends on scope" is fine as long as you give me a floor and a ceiling.*
+2. **ICP corrections** — company size band (crew/turnover), sectors to exclude, Dublin/ROI in or out.
+3. **HubSpot regional settings** — OK to fix currency→GBP and timezone→Europe/London? (You change it in HubSpot settings; I can't via API.)
+
+### Original question list (for reference)
 
 1. **Decision-matrix form** — where does the `vedri.studio` VP decision-matrix form submit to? (I only see the VFX form on `vfx.vedri.studio`.) Is it wired to `info@vedri.studio` yet?
 2. **HubSpot regional settings** — OK for me to have you switch currency→GBP and timezone→Europe/London before we provision? (You must do this in HubSpot; the API can't.)
