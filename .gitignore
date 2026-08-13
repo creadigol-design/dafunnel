@@ -1,6 +1,16 @@
+# Secrets — never commit
 .env
 .env.*
+!.env.example
+
+# Dependencies / build
 node_modules/
-output/drafts/
+dist/
+
+# Local state + generated output (machine-specific, not source)
+data/
+output/
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
