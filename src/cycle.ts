@@ -16,6 +16,7 @@ import { config } from '../config/index.js';
 import { log } from './logger.js';
 import { db, closeDb } from './db/index.js';
 import { syncHubSpot } from './hubspot/sync.js';
+import { runIngest } from './ingest/index.js';
 
 const clog = log.child('cycle');
 
@@ -35,7 +36,17 @@ type Step = { name: string; run: () => Promise<StepResult> };
  * are included), dashboard last (so it reflects the whole cycle).
  */
 const STEPS: Step[] = [
-  step('ingest', 'Phase 3: pull inbound, built lists, LinkedIn logs, reactivation'),
+  {
+    name: 'ingest',
+    run: async () => {
+      const s = await runIngest();
+      return {
+        name: 'ingest',
+        status: 'ok',
+        counts: { imported: s.imported, rejected: s.rejected, needsConsent: s.needsConsent },
+      };
+    },
+  },
   {
     name: 'reconcile-hubspot',
     run: async () => {

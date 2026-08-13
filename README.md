@@ -87,6 +87,8 @@ on machine fields (score, temperature, sequence position, suppression).
 |---|---|
 | `pnpm run cycle` | One pass of the funnel: ingest → reconcile → score → sequence → replies → governor → alerts → dashboard. Steps light up as their phases land. |
 | `pnpm run provision-hubspot` | Idempotently create the `vedri_` schema + pipeline stages. `-- --plan` previews; `-- --smoketest` runs the 5-dummy-contact test. |
+| `pnpm run import-csv <path> [profile]` | Import a lead CSV and print a validation report. Profiles: `vedri-crm` (Daniel's export), `built-list` (purchased/built lists). |
+| `pnpm run log-touch -- --email .. --note ".."` | Log a LinkedIn/social DM or connection; schedules a follow-up reminder. |
 | `pnpm run doctor` | Health check: safety flags, DB, last cycle, suppression list, free-tier headroom, credential presence. |
 | `pnpm run explain <email>` | Full event history + score derivation for one lead — answers "why is this hot?" |
 | `pnpm run typecheck` | `tsc --noEmit`. |
@@ -105,6 +107,26 @@ scripts/           doctor, explain (more per phase)
 test/              vitest suites
 docs/              PHASE-0-PLAN, and (coming) FUNNEL-MODEL, COMPLIANCE
 ```
+
+## Lead ingestion (Phase 3)
+
+Five sources, one normalised pipeline, all deduping on email and validated:
+
+- **Inbound** — decision-matrix + contact-form submissions at `info@vedri.studio`
+  (FormSubmit.co). Parser is modelled on the real email format; the client's quiz
+  answers go to internal notes, and the derived kit list is never client-facing.
+- **Built lists** — `data/prospects/*.csv` (built-list profile): strict schema,
+  validation report, sole-trader/role-account flagging.
+- **LinkedIn** — `pnpm run log-touch` + a watched `data/social/` folder. No
+  automation or scraping.
+- **Reactivation** — `data/reactivation/*.csv` (vedri-crm profile), segmented
+  worked-with-us / quoted-but-lost / enquired-never-quoted. Worked first.
+- **Mailchimp** — website opt-ins (consent basis); live pull pending connector auth.
+
+Each import produces a report: imported, rejected (with reasons), duplicates,
+role inboxes, and freemail/individual addresses flagged as needing consent
+(these are never cold-mailed). Drop a CSV in the right folder and it's picked up
+on the next `pnpm run cycle`, or import one on demand with `pnpm run import-csv`.
 
 ## How to change copy
 

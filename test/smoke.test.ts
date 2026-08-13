@@ -14,6 +14,13 @@ const tmp = mkdtempSync(join(tmpdir(), 'vedri-test-'));
 process.env.DB_PATH = join(tmp, 'test.db');
 process.env.LOG_DIR = join(tmp, 'logs');
 process.env.DRY_RUN = 'true';
+// Isolate tests from live services and repo data. Blank the HubSpot token
+// (dotenv won't override an already-set key) so sync skips, and point ingest
+// drop-folders at an empty temp dir so the cycle imports nothing real.
+process.env.HUBSPOT_PRIVATE_APP_TOKEN = '';
+process.env.INGEST_PROSPECTS_DIR = join(tmp, 'noingest');
+process.env.INGEST_REACTIVATION_DIR = join(tmp, 'noingest');
+process.env.INGEST_SOCIAL_DIR = join(tmp, 'noingest');
 
 // Dynamic imports so the env above is in place before config loads.
 const { db, closeDb } = await import('../src/db/index.js');

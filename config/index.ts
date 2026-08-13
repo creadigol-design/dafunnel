@@ -64,6 +64,9 @@ export interface Config {
   };
 
   paths: { db: string; drafts: string; logs: string };
+
+  /** Drop-folders scanned by the ingestion adapters each cycle. */
+  ingest: { prospects: string; reactivation: string; social: string };
 }
 
 export const config: Config = Object.freeze({
@@ -115,6 +118,12 @@ export const config: Config = Object.freeze({
     db: str('DB_PATH', 'data/vedri-funnel.db'),
     drafts: str('DRAFTS_DIR', 'output/drafts'),
     logs: str('LOG_DIR', 'output/logs'),
+  },
+
+  ingest: {
+    prospects: str('INGEST_PROSPECTS_DIR', 'data/prospects'),
+    reactivation: str('INGEST_REACTIVATION_DIR', 'data/reactivation'),
+    social: str('INGEST_SOCIAL_DIR', 'data/social'),
   },
 });
 
