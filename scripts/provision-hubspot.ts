@@ -217,5 +217,18 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   clog.error('provisioning failed', { error: err instanceof Error ? err.message : String(err) });
+  // Surface HubSpot's missing-scope list so the fix is obvious.
+  const body = (err as { body?: unknown }).body as
+    | { category?: string; errors?: { context?: { requiredGranularScopes?: string[] } }[] }
+    | undefined;
+  if (body?.category === 'MISSING_SCOPES') {
+    console.error(
+      '\nThe Private App is missing scopes. Edit it in HubSpot → Private Apps → Scopes,',
+      '\nadd the CRM schema + object write scopes below, save, and re-run (the token is unchanged):',
+      '\n  crm.schemas.contacts.write, crm.schemas.deals.write,',
+      '\n  crm.objects.contacts.read/write, crm.objects.deals.read/write,',
+      '\n  crm.objects.companies.read/write\n',
+    );
+  }
   process.exit(1);
 });
