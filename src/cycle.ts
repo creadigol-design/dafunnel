@@ -20,6 +20,8 @@ import { runIngest } from './ingest/index.js';
 import { runScoring } from './scoring.js';
 import { runSequences } from './sequences/engine.js';
 import { pollReplies } from './replies/poll.js';
+import { runGovernor } from './governor.js';
+import { deliverAlerts, maybeSendDailyDigest } from './alerts/deliver.js';
 
 const clog = log.child('cycle');
 
@@ -108,8 +110,32 @@ const STEPS: Step[] = [
       };
     },
   },
-  step('governor', 'Phase 7: project pace vs target, recommend volume changes'),
-  step('alerts', 'Phase 7: send urgent alerts + batched digests'),
+  {
+    name: 'governor',
+    run: async () => {
+      const g = runGovernor();
+      return {
+        name: 'governor',
+        status: 'ok',
+        ...(g.ran
+          ? { counts: { projected: Math.round((g.projection?.projected ?? 0) * 10) / 10 }, note: g.recommendation?.status }
+          : { note: 'not due (runs 1st and 15th)' }),
+      };
+    },
+  },
+  {
+    name: 'alerts',
+    run: async () => {
+      const digest = await maybeSendDailyDigest();
+      const s = await deliverAlerts();
+      return {
+        name: 'alerts',
+        status: s.skipped ? 'skipped' : 'ok',
+        counts: { urgent: s.urgentSent, batched: s.batchedSent, held: s.held, digest: digest ? 1 : 0 },
+        ...(s.skipped ? { note: 'no delivery channel configured (Slack token / MAIL_PASS)' } : {}),
+      };
+    },
+  },
   step('dashboard', 'Phase 8: regenerate dashboard.html'),
 ];
 
