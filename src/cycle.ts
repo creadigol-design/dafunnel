@@ -19,6 +19,7 @@ import { syncHubSpot } from './hubspot/sync.js';
 import { runIngest } from './ingest/index.js';
 import { runScoring } from './scoring.js';
 import { runSequences } from './sequences/engine.js';
+import { pollReplies } from './replies/poll.js';
 
 const clog = log.child('cycle');
 
@@ -89,7 +90,24 @@ const STEPS: Step[] = [
       };
     },
   },
-  step('replies', 'Phase 6: poll mailboxes, classify, route, book calls'),
+  {
+    name: 'replies',
+    run: async () => {
+      const s = await pollReplies();
+      return {
+        name: 'replies',
+        status: s.skipped ? 'skipped' : 'ok',
+        counts: {
+          fetched: s.fetched,
+          inboundForms: s.inboundForms,
+          routed: s.repliesRouted,
+          drafted: s.responsesDrafted,
+          unknown: s.unknown,
+        },
+        ...(s.skipped ? { note: 'IMAP unavailable or MAIL_PASS unset' } : {}),
+      };
+    },
+  },
   step('governor', 'Phase 7: project pace vs target, recommend volume changes'),
   step('alerts', 'Phase 7: send urgent alerts + batched digests'),
   step('dashboard', 'Phase 8: regenerate dashboard.html'),

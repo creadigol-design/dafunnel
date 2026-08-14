@@ -25,6 +25,7 @@ process.env.INGEST_SOCIAL_DIR = join(tmp, 'noingest');
 // (empty string would fall back to the default) and blank the API key.
 process.env.SEQUENCES_ACTIVE = 'none';
 process.env.ANTHROPIC_API_KEY = '';
+process.env.MAIL_PASS = ''; // never attempt IMAP from tests
 
 // Dynamic imports so the env above is in place before config loads.
 const { db, closeDb } = await import('../src/db/index.js');
