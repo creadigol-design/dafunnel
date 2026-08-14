@@ -111,6 +111,13 @@ async function run(): Promise<Check[]> {
   checks.push(checkSecretPresent('Anthropic API key', config.anthropic.apiKey, 'Phase 5'));
   checks.push(checkSecretPresent('Slack bot token', config.slack.botToken, 'Phase 7'));
   checks.push({
+    name: 'cPanel mailbox (IMAP/SMTP)',
+    status: config.mail.pass ? 'ok' : 'todo',
+    detail: config.mail.pass
+      ? `${config.mail.user} @ ${config.mail.host} — run mail-doctor to verify live`
+      : 'MAIL_PASS not set (needed for drafts/replies)',
+  });
+  checks.push({
     name: 'cold sending domain',
     status: config.mailboxes.cold ? 'ok' : 'todo',
     detail: config.mailboxes.cold || 'not configured (buy + warm before cold go-live)',

@@ -11,6 +11,8 @@
     "cycle": "tsx src/cycle.ts",
     "provision-hubspot": "tsx scripts/provision-hubspot.ts",
     "sync-hubspot": "tsx scripts/sync-hubspot.ts",
+    "mail-doctor": "tsx scripts/mail-doctor.ts",
+    "sample-draft": "tsx scripts/sample-draft.ts",
     "import-csv": "tsx scripts/import-csv.ts",
     "log-touch": "tsx scripts/log-touch.ts",
     "doctor": "tsx scripts/doctor.ts",
@@ -24,11 +26,14 @@
     "better-sqlite3": "^11.8.1",
     "csv-parse": "^7.0.2",
     "dotenv": "^16.4.7",
+    "imapflow": "^1.7.0",
+    "nodemailer": "^9.0.5",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.5",
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.2"

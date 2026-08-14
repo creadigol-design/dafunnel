@@ -52,6 +52,21 @@ export interface Config {
 
   /** Sender identity + postal address + unsubscribe — required in every email (UK PECR). */
   sender: { name: string; postalAddress: string; unsubscribeMailto: string };
+
+  /**
+   * cPanel mailbox (IMAP + SMTP) for the warm inbox. Drafts are appended to the
+   * IMAP Drafts folder for Daniel to review and send; replies/inbound are read
+   * over IMAP; SMTP sends only when auto-send is switched on.
+   */
+  mail: {
+    host: string;
+    imapPort: number;
+    smtpPort: number;
+    user: string;
+    pass: string;
+    draftsFolder: string;
+    fromName: string;
+  };
   slack: { botToken: string; alertChannel: string; urgentDmUser: string };
 
   /** HubSpot free-tier ceilings; alert when within 20%. */
@@ -114,6 +129,15 @@ export const config: Config = Object.freeze({
     // {{NEEDS_INPUT}} until Daniel supplies the studio's registered postal address.
     postalAddress: str('SENDER_POSTAL_ADDRESS', '{{NEEDS_INPUT: studio postal address}}'),
     unsubscribeMailto: str('UNSUBSCRIBE_MAILTO', 'info@vedri.studio'),
+  },
+  mail: {
+    host: str('MAIL_HOST', 'vedri.studio'),
+    imapPort: Number(str('MAIL_IMAP_PORT', '993')),
+    smtpPort: Number(str('MAIL_SMTP_PORT', '465')),
+    user: str('MAIL_USER', 'info@vedri.studio'),
+    pass: str('MAIL_PASS'),
+    draftsFolder: str('MAIL_DRAFTS_FOLDER', 'INBOX.Drafts'),
+    fromName: str('MAIL_FROM_NAME', 'vedrí'),
   },
   slack: {
     botToken: str('SLACK_BOT_TOKEN'),
