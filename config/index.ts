@@ -49,6 +49,9 @@ export interface Config {
     calendarId: string;
   };
   anthropic: { apiKey: string; model: string };
+
+  /** Sender identity + postal address + unsubscribe — required in every email (UK PECR). */
+  sender: { name: string; postalAddress: string; unsubscribeMailto: string };
   slack: { botToken: string; alertChannel: string; urgentDmUser: string };
 
   /** HubSpot free-tier ceilings; alert when within 20%. */
@@ -105,6 +108,12 @@ export const config: Config = Object.freeze({
   anthropic: {
     apiKey: str('ANTHROPIC_API_KEY'),
     model: str('CLAUDE_MODEL', 'claude-sonnet-5'),
+  },
+  sender: {
+    name: str('SENDER_NAME', 'Daniel Evans, vedrí'),
+    // {{NEEDS_INPUT}} until Daniel supplies the studio's registered postal address.
+    postalAddress: str('SENDER_POSTAL_ADDRESS', '{{NEEDS_INPUT: studio postal address}}'),
+    unsubscribeMailto: str('UNSUBSCRIBE_MAILTO', 'info@vedri.studio'),
   },
   slack: {
     botToken: str('SLACK_BOT_TOKEN'),

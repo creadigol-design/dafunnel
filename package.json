@@ -20,9 +20,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "better-sqlite3": "^11.8.1",
     "csv-parse": "^7.0.2",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
