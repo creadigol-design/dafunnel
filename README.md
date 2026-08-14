@@ -155,12 +155,30 @@ the whole derivation).
   clock anchored to re-engagement — so a mid-conversation lead carries on from
   where it was rather than starting ice-cold.
 
+## Sequences & drafting (Phase 5)
+
+Sequences are declared in `sequences/*.yaml` — A1 inbound / A2 cold / A3
+reactivation (Studio) and B1/B2/B3 (VFX). Each step has a purpose, guidance and
+day-offset; the engine matches a lead to a sequence by track + source, and on
+each due step generates copy with Claude, lints it, and persists a draft.
+
+- **Staged go-live** (`SEQUENCES_ACTIVE`): only listed sequences run. Defaults to
+  reactivation only (warmest, lowest-risk); add inbound, then cold, as the
+  sending domain warms.
+- **Send windows:** touches are scheduled Tue–Thu only, in the configured
+  windows, never within 48h of each other.
+- **Drafts:** in `DRY_RUN` they're written to `output/drafts/` as files; live,
+  passing drafts are appended to the cPanel **Drafts folder over IMAP** for
+  review. Lint-failed drafts are always written to a flagged file, never sent.
+- Preview a single lead with `pnpm run sample-draft <email>`, or run a batch with
+  `pnpm run draft-batch [limit]`.
+
 ## How to change copy
 
-Sequences will be declared in `sequences/*.yaml` (Phase 5) so copy can be edited
-without touching code. Every generated draft passes a lint check (banned fluff,
-American spellings, internal kit terminology, unresolved `{{NEEDS_INPUT}}`,
-missing unsubscribe, >150 words, >1 question mark) before it can reach a human.
+Edit `sequences/*.yaml` — no code changes needed. Every generated draft passes
+the lint check (banned fluff, American spellings, internal kit terminology,
+unresolved `{{NEEDS_INPUT}}`, missing unsubscribe, >150 words, >1 question mark)
+before it can reach a human; failures are flagged to the review queue.
 
 ## How to switch auto-send on (later, per sequence)
 

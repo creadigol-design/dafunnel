@@ -18,6 +18,7 @@ import { db, closeDb } from './db/index.js';
 import { syncHubSpot } from './hubspot/sync.js';
 import { runIngest } from './ingest/index.js';
 import { runScoring } from './scoring.js';
+import { runSequences } from './sequences/engine.js';
 
 const clog = log.child('cycle');
 
@@ -77,7 +78,17 @@ const STEPS: Step[] = [
       };
     },
   },
-  step('sequence-and-draft', 'Phase 5: advance sequences, generate + lint drafts'),
+  {
+    name: 'sequence-and-draft',
+    run: async () => {
+      const s = await runSequences();
+      return {
+        name: 'sequence-and-draft',
+        status: 'ok',
+        counts: { drafted: s.generated, lintFailed: s.lintFailed, processed: s.processed },
+      };
+    },
+  },
   step('replies', 'Phase 6: poll mailboxes, classify, route, book calls'),
   step('governor', 'Phase 7: project pace vs target, recommend volume changes'),
   step('alerts', 'Phase 7: send urgent alerts + batched digests'),

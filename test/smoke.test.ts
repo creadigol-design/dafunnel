@@ -21,6 +21,10 @@ process.env.HUBSPOT_PRIVATE_APP_TOKEN = '';
 process.env.INGEST_PROSPECTS_DIR = join(tmp, 'noingest');
 process.env.INGEST_REACTIVATION_DIR = join(tmp, 'noingest');
 process.env.INGEST_SOCIAL_DIR = join(tmp, 'noingest');
+// No live copy generation in tests: point sequences at a non-matching id
+// (empty string would fall back to the default) and blank the API key.
+process.env.SEQUENCES_ACTIVE = 'none';
+process.env.ANTHROPIC_API_KEY = '';
 
 // Dynamic imports so the env above is in place before config loads.
 const { db, closeDb } = await import('../src/db/index.js');

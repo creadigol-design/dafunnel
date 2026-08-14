@@ -1,0 +1,23 @@
+# B1 — Inbound (Track B / VFX). Fast, consultative, offer = post/finishing.
+id: B1-inbound
+track: VFX
+sources: [Inbound Form, Decision Matrix, Mailchimp Signup]
+fromMailbox: warm
+cold: false
+steps:
+  - dayOffset: 0
+    purpose: Acknowledge their specific finishing need and what's involved.
+    guidance: Reply fast; restate their need plainly, one useful observation, offer a call via the booking link.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 2
+    purpose: A short, relevant answer about the finishing work implied in their brief.
+    guidance: One useful answer. No ask beyond "worth a quick call?".
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 5
+    purpose: What our finishing pipeline changes for their delivery timeline.
+    guidance: One concrete benefit to their schedule or quality.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 10
+    purpose: Soft close.
+    guidance: Graceful out, short.
+    exitConditions: [reply, booked, unsubscribed]

@@ -1,0 +1,26 @@
+# A1 — Inbound / Decision Matrix (Track A / Studio). Fast, consultative.
+id: A1-inbound
+track: Studio
+sources: [Inbound Form, Decision Matrix, Mailchimp Signup]
+fromMailbox: warm
+cold: false
+steps:
+  - dayOffset: 0
+    purpose: Acknowledge their specific project and restate their recommended approach in their terms.
+    guidance: >
+      Reply fast and human. Restate their recommended approach plainly, add one
+      genuinely useful observation about their brief, and offer a call via the
+      booking link. Never mention specific kit.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 2
+    purpose: A short, relevant technical answer to something implied in their brief.
+    guidance: One useful answer or a relevant piece of work. No ask beyond "worth a quick call?".
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 5
+    purpose: The real-time compositing angle — what it changes about their shoot day specifically.
+    guidance: Make it concrete to their format. One specific benefit to their day on set.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 10
+    purpose: Soft close — "still live, or has this moved?"
+    guidance: Give a graceful out. Short and easy to answer either way.
+    exitConditions: [reply, booked, unsubscribed]

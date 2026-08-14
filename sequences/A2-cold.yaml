@@ -1,0 +1,33 @@
+# A2 — Cold outbound (Track A / Studio). From the cold sending domain only.
+id: A2-cold
+track: Studio
+sources: [Built List]
+fromMailbox: cold
+cold: true
+steps:
+  - dayOffset: 0
+    purpose: Hook tied to something specific about their production work.
+    guidance: One specific, genuine hook about their work. No pitch yet. One small ask.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 4
+    purpose: The multi-cam / no-frustum-limit point.
+    guidance: What multi-cam with a live composited output on every angle changes for them.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 9
+    purpose: A short case-shaped proof.
+    guidance: A brief, concrete example of the kind of result. No gear names.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 15
+    purpose: Budget-framing — North Wales vs London-stage economics.
+    guidance: Frame the cost difference honestly and specifically. Low-key ask.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 22
+    purpose: Useful-with-no-ask — a resource, not a pitch.
+    guidance: Give something genuinely useful and expect nothing back. Builds goodwill.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 28
+    purpose: Breakup — the highest-performing touch.
+    guidance: >
+      Short, warm, final. Give them an easy out. The breakup consistently
+      outperforms the middle touches — write it properly.
+    exitConditions: [reply, booked, unsubscribed]

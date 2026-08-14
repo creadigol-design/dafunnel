@@ -1,0 +1,31 @@
+# B2 — Cold outbound (Track B / VFX). From the cold sending domain only.
+id: B2-cold
+track: VFX
+sources: [Built List]
+fromMailbox: cold
+cold: true
+steps:
+  - dayOffset: 0
+    purpose: Hook tied to a specific project of theirs that likely needed finishing.
+    guidance: One specific, genuine hook. No pitch yet. Small ask.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 4
+    purpose: Overflow comp/cleanup capacity — how we take finishing off their plate.
+    guidance: Concrete framing of the overflow-finishing value. No gear names.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 9
+    purpose: A short case-shaped proof of finishing work.
+    guidance: Brief, concrete example. No pitch.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 15
+    purpose: Turnaround / cost framing.
+    guidance: Honest, specific framing of turnaround and cost. Low-key ask.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 22
+    purpose: Useful-with-no-ask resource.
+    guidance: Give something genuinely useful, expect nothing back.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 28
+    purpose: Breakup.
+    guidance: Short, warm, final. Easy out.
+    exitConditions: [reply, booked, unsubscribed]

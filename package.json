@@ -13,6 +13,7 @@
     "sync-hubspot": "tsx scripts/sync-hubspot.ts",
     "mail-doctor": "tsx scripts/mail-doctor.ts",
     "sample-draft": "tsx scripts/sample-draft.ts",
+    "draft-batch": "tsx scripts/draft-batch.ts",
     "import-csv": "tsx scripts/import-csv.ts",
     "log-touch": "tsx scripts/log-touch.ts",
     "doctor": "tsx scripts/doctor.ts",

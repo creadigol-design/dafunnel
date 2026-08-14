@@ -57,6 +57,13 @@ export interface Config {
   booking: { link: string };
 
   /**
+   * Sequence activation for staged go-live (Phase 10): only these sequence ids
+   * generate drafts. Defaults to reactivation only — the warmest, lowest-risk
+   * audience. Add inbound, then cold, as the domain warms.
+   */
+  sequences: { active: string[]; perCycleLimit: number };
+
+  /**
    * cPanel mailbox (IMAP + SMTP) for the warm inbox. Drafts are appended to the
    * IMAP Drafts folder for Daniel to review and send; replies/inbound are read
    * over IMAP; SMTP sends only when auto-send is switched on.
@@ -134,6 +141,13 @@ export const config: Config = Object.freeze({
     unsubscribeMailto: str('UNSUBSCRIBE_MAILTO', 'info@vedri.studio'),
   },
   booking: { link: str('BOOKING_LINK') },
+  sequences: {
+    active: str('SEQUENCES_ACTIVE', 'A3-reactivation,B3-reactivation')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    perCycleLimit: Number(str('SEQUENCES_PER_CYCLE', '25')),
+  },
   mail: {
     host: str('MAIL_HOST', 'vedri.studio'),
     imapPort: Number(str('MAIL_IMAP_PORT', '993')),
