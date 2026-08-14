@@ -187,6 +187,21 @@ The global `AUTO_SEND_FOLLOWUPS=true` flag arms it; per-sequence config decides
 which sequences actually auto-send. It ships off and stays off until Daniel
 decides otherwise.
 
+## Deploying to the VPS (Phase 9 — shadow mode)
+
+```bash
+git clone https://github.com/creadigol-design/dafunnel.git ~/vedri-funnel
+cd ~/vedri-funnel
+bash deploy/setup-vps.sh    # installs Node 22 + pnpm, deps, runs tests
+# → creates .env from the template and stops; fill in the secrets, then:
+bash deploy/setup-vps.sh    # installs cron (cycle hourly, doctor 07:00), proves it
+```
+
+Keep `DRY_RUN=true` — that *is* the 14-day shadow mode: everything computes,
+drafts land in `output/drafts/` as files, Slack alerts flow, and nothing sends.
+See `RUNBOOK.md` for kill switches and failure triage, `docs/FUNNEL-MODEL.md`
+for the maths, and `docs/COMPLIANCE.md` for the UK GDPR/PECR position.
+
 ## Compliance
 
 UK GDPR + PECR. Suppression is checked before **every** send; one-click
