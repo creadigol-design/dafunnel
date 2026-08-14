@@ -22,6 +22,7 @@ import { runSequences } from './sequences/engine.js';
 import { pollReplies } from './replies/poll.js';
 import { runGovernor } from './governor.js';
 import { deliverAlerts, maybeSendDailyDigest } from './alerts/deliver.js';
+import { generateDashboard } from './dashboard.js';
 
 const clog = log.child('cycle');
 
@@ -136,7 +137,13 @@ const STEPS: Step[] = [
       };
     },
   },
-  step('dashboard', 'Phase 8: regenerate dashboard.html'),
+  {
+    name: 'dashboard',
+    run: async () => {
+      const path = generateDashboard();
+      return { name: 'dashboard', status: 'ok', note: path };
+    },
+  },
 ];
 
 /** Placeholder step factory — logs and reports skipped until its phase lands. */
