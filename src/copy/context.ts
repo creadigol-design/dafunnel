@@ -6,6 +6,7 @@
  * internal notes (which for inbound leads contain derived kit requirements).
  */
 import type { Lead } from '../types.js';
+import { config } from '../../config/index.js';
 
 export interface CopyContext {
   firstName: string;
@@ -16,6 +17,8 @@ export interface CopyContext {
   relationship: string | null;
   /** The ONLY facts the model may state. Client-safe positioning, no gear names. */
   approvedFacts: string[];
+  /** Booking link for the call-to-action, if configured. */
+  bookingLink: string | null;
 }
 
 /** Client-safe positioning points (no product/brand names — see the lint list). */
@@ -47,5 +50,6 @@ export function buildContext(lead: Lead): CopyContext {
     recommendedApproach: lead.recommendedApproach,
     relationship: extractRelationship(lead),
     approvedFacts: APPROVED_TALKING_POINTS,
+    bookingLink: config.booking.link || null,
   };
 }

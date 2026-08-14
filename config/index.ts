@@ -53,6 +53,9 @@ export interface Config {
   /** Sender identity + postal address + unsubscribe — required in every email (UK PECR). */
   sender: { name: string; postalAddress: string; unsubscribeMailto: string };
 
+  /** Booking link offered as the low-friction call-to-action in copy. */
+  booking: { link: string };
+
   /**
    * cPanel mailbox (IMAP + SMTP) for the warm inbox. Drafts are appended to the
    * IMAP Drafts folder for Daniel to review and send; replies/inbound are read
@@ -130,6 +133,7 @@ export const config: Config = Object.freeze({
     postalAddress: str('SENDER_POSTAL_ADDRESS', '{{NEEDS_INPUT: studio postal address}}'),
     unsubscribeMailto: str('UNSUBSCRIBE_MAILTO', 'info@vedri.studio'),
   },
+  booking: { link: str('BOOKING_LINK') },
   mail: {
     host: str('MAIL_HOST', 'vedri.studio'),
     imapPort: Number(str('MAIL_IMAP_PORT', '993')),

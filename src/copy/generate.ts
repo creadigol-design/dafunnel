@@ -50,6 +50,10 @@ function userPrompt(ctx: CopyContext, step: StepSpec): string {
     'APPROVED FACTS (the only claims you may make):',
     ...ctx.approvedFacts.map((f) => `- ${f}`),
     '',
+    ctx.bookingLink
+      ? `CALL-TO-ACTION: if the ask is to talk, point them to the booking link ${ctx.bookingLink} (e.g. "grab a slot that suits: <link>"). Otherwise ask for a short reply.`
+      : 'CALL-TO-ACTION: ask for a short reply or a quick call.',
+    '',
     'Write two subject-line variants and one body. Keep the body under 150 words.',
   ]
     .filter(Boolean)
