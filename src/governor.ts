@@ -122,14 +122,16 @@ function currentBandCounts(): BandCounts {
 }
 
 function stageDataPoints(): number {
-  // Only genuine funnel evidence counts: classified replies and engagement
-  // signals from real interactions. Seed and warm-start bookkeeping does not —
-  // otherwise the governor would claim "observed rates" off imported history.
+  // Only genuine funnel evidence counts. This is an ALLOW-list on purpose: a
+  // deny-list of bookkeeping triggers has now failed twice (warm-start, then
+  // hydration) — each new internal trigger re-inflated the count and made the
+  // governor claim "observed rates" off imported history. An allow-list fails
+  // humble instead: new genuine signal sources must be added here explicitly.
   const row = db()
     .prepare(
       `SELECT COUNT(*) c FROM events
        WHERE type = 'reply.classified'
-          OR (type = 'score.signal' AND trigger NOT IN ('seed', 'reactivation-warm-start'))`,
+          OR (type = 'score.signal' AND trigger = 'reply')`,
     )
     .get() as { c: number };
   return row.c;

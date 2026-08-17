@@ -53,10 +53,11 @@ function gather(asOf: Date) {
     .prepare("SELECT COUNT(*) c FROM events WHERE type='band.changed' AND json_extract(data,'$.newBand')='Closed Won' AND created_at >= ?")
     .get(monthStart) as { c: number };
 
+  // Allow-list of genuine evidence — must match governor.stageDataPoints.
   const dataPoints = d
     .prepare(
       `SELECT COUNT(*) c FROM events WHERE type = 'reply.classified'
-        OR (type = 'score.signal' AND trigger NOT IN ('seed','reactivation-warm-start'))`,
+        OR (type = 'score.signal' AND trigger = 'reply')`,
     )
     .get() as { c: number };
 
