@@ -42,6 +42,7 @@ export const ALERT_TYPES = {
   freetier_ceiling_warning: { urgency: 'daily', slack: true, email: true, urgentDm: false },
   needs_input_flagged: { urgency: 'daily', slack: true, email: false, urgentDm: false },
   prospects_found: { urgency: 'daily', slack: true, email: false, urgentDm: false },
+  ig_dm_followup: { urgency: 'daily', slack: true, email: false, urgentDm: false },
 } as const satisfies Record<string, AlertTypeConfig>;
 
 export type AlertType = keyof typeof ALERT_TYPES;

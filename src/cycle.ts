@@ -23,6 +23,7 @@ import { pollReplies } from './replies/poll.js';
 import { runGovernor } from './governor.js';
 import { runProspector } from './prospecting/discover.js';
 import { enrichCandidates } from './prospecting/enrich.js';
+import { sweepDueDms } from './prospecting/dm.js';
 import { deliverAlerts, maybeSendDailyDigest } from './alerts/deliver.js';
 import { generateDashboard } from './dashboard.js';
 
@@ -121,12 +122,15 @@ const STEPS: Step[] = [
       // (Instagram intake, timeouts). No-op when nothing is pending; bounded
       // so a backlog cannot stretch the hourly cycle badly.
       const e = await enrichCandidates(5);
+      // DMs sent 4+ days ago with no reply → follow-up drafted + Slack nudge.
+      const dm = await sweepDueDms();
       return {
         name: 'prospect',
         status: s.skippedReason ? 'skipped' : 'ok',
         counts: {
           ...(s.ran ? { found: s.found, queued: s.queued, duplicates: s.duplicates } : {}),
           ...(e.looked ? { contactsLooked: e.looked, contactsFound: e.withEmail } : {}),
+          ...(dm.due ? { dmFollowupsDue: dm.due } : {}),
         },
         note: s.skippedReason ?? (s.ran ? undefined : 'discovery not due (weekly)'),
       };

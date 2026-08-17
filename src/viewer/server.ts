@@ -21,6 +21,7 @@ import { eventsForLead } from '../db/events.js';
 import { getLeadByEmail, upsertLead } from '../db/leads.js';
 import { isFreemail } from '../ingest/normalise.js';
 import { enrichCandidates } from '../prospecting/enrich.js';
+import { generateDm, igHandle, type DmProspect } from '../prospecting/dm.js';
 import type { Lead } from '../types.js';
 import { randomUUID } from 'node:crypto';
 import { renderMessage } from '../copy/render.js';
@@ -428,6 +429,48 @@ interface ProspectRow {
   origin: string;
   status: string;
   discovered_at: string;
+  ig_dm: string | null;
+  ig_dm_status: string;
+  ig_dm_sent_at: string | null;
+  ig_dm_count: number;
+}
+
+/** The Instagram DM panel for an instagram-origin prospect card. */
+function dmPanel(p: ProspectRow): string {
+  if (p.origin !== 'instagram' || p.status === 'discarded') return '';
+  const handle = igHandle(p.evidence_url);
+  if (!handle) return '';
+  const dmLink = `https://ig.me/m/${esc(handle)}`;
+  const writeLabel = p.ig_dm_count >= 1 ? 'Write the follow-up DM' : 'Write a DM';
+
+  if (p.ig_dm_status === 'none') {
+    return `<div class="actions"><form method="POST" action="/prospect-dm" class="inline"><input type="hidden" name="id" value="${esc(p.id)}"><button type="submit" class="secondary">${writeLabel}</button></form></div>`;
+  }
+  if (p.ig_dm_status === 'drafted' || p.ig_dm_status === 'follow_up_due') {
+    return `
+      ${p.ig_dm_status === 'follow_up_due' ? '<div class="meta" style="margin-top:10px"><span class="chip flagged">follow-up due — no reply to your last DM</span></div>' : ''}
+      <div class="field" style="margin-top:10px"><label>Instagram DM — copy, then send it from your own account</label>
+      <textarea rows="4" readonly>${esc(p.ig_dm ?? '')}</textarea></div>
+      <div class="actions">
+        <button type="button" onclick="navigator.clipboard.writeText(this.closest('.card').querySelector('textarea').value);this.textContent='Copied ✓'">Copy DM</button>
+        <a class="btnlink" href="${dmLink}" target="_blank" rel="noopener">Open their DMs ↗</a>
+        <form method="POST" action="/prospect-dm-sent" class="inline"><input type="hidden" name="id" value="${esc(p.id)}"><button type="submit" class="secondary">I've sent it</button></form>
+        <form method="POST" action="/prospect-dm" class="inline"><input type="hidden" name="id" value="${esc(p.id)}"><button type="submit" class="secondary">Rewrite</button></form>
+      </div>`;
+  }
+  if (p.ig_dm_status === 'sent') {
+    return `<div class="actions">
+      <span class="chip">DM sent ${esc((p.ig_dm_sent_at ?? '').slice(0, 10))} — waiting${p.ig_dm_count >= 2 ? ' (last one)' : ''}</span>
+      <form method="POST" action="/prospect-dm-replied" class="inline"><input type="hidden" name="id" value="${esc(p.id)}"><button type="submit">They replied 🎉</button></form>
+    </div>`;
+  }
+  if (p.ig_dm_status === 'replied') {
+    return `<div class="meta" style="margin-top:10px"><span class="chip hot">replied on Instagram — carry the chat on there, or approve above to move to email</span></div>`;
+  }
+  if (p.ig_dm_status === 'done') {
+    return `<div class="meta" style="margin-top:10px"><span class="muted">No reply after ${p.ig_dm_count} DMs — leaving them be.</span></div>`;
+  }
+  return '';
 }
 
 function serveProspects(
@@ -481,6 +524,7 @@ function serveProspects(
           ${link(p.evidence_url, 'evidence ↗')}
           ${p.contact_page_url ? '· ' + link(p.contact_page_url, 'contact page ↗') : ''}
         </div>
+        ${dmPanel(p)}
         ${actions}
       </div>`;
     })
@@ -650,6 +694,91 @@ function handleProspectDiscard(req: IncomingMessage, res: ServerResponse): void 
   });
 }
 
+// ── Instagram DM assist (draft/track only — Daniel's thumb does the sends) ──
+function readBody(req: IncomingMessage, cb: (params: URLSearchParams) => void | Promise<void>): void {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => void cb(new URLSearchParams(raw)));
+}
+
+function handleDmWrite(req: IncomingMessage, res: ServerResponse): void {
+  readBody(req, async (params) => {
+    const id = params.get('id') ?? '';
+    const p = db()
+      .prepare(
+        `SELECT id, company, category, location, why_fit, contact_name, track, ig_dm_count FROM prospects
+         WHERE id = ? AND origin = 'instagram' AND status != 'discarded'`,
+      )
+      .get(id) as (DmProspect & { ig_dm_count: number }) | undefined;
+    if (!p) {
+      res.writeHead(303, { Location: '/prospects?error=Prospect%20not%20found' });
+      res.end();
+      return;
+    }
+    try {
+      const dm = await generateDm(p, p.ig_dm_count >= 1 ? 'follow_up' : 'intro');
+      const now = new Date().toISOString();
+      db().prepare("UPDATE prospects SET ig_dm = ?, ig_dm_status = 'drafted', updated_at = ? WHERE id = ?").run(dm, now, id);
+      recordEvent({
+        type: 'prospect.dm',
+        trigger: 'viewer',
+        reason: `DM drafted for ${p.company} (${p.ig_dm_count >= 1 ? 'follow-up' : 'intro'})`,
+        data: { prospectId: id, status: 'drafted' },
+      });
+      res.writeHead(303, { Location: '/prospects' });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      vlog.error('dm draft failed', { id, error: m });
+      res.writeHead(303, { Location: `/prospects?error=${encodeURIComponent(`Could not draft the DM (${m}) — try again.`)}` });
+    }
+    res.end();
+  });
+}
+
+function handleDmSent(req: IncomingMessage, res: ServerResponse): void {
+  readBody(req, (params) => {
+    const id = params.get('id') ?? '';
+    const now = new Date().toISOString();
+    const p = db()
+      .prepare("SELECT company FROM prospects WHERE id = ? AND ig_dm_status IN ('drafted','follow_up_due')")
+      .get(id) as { company: string } | undefined;
+    if (p) {
+      db()
+        .prepare(
+          "UPDATE prospects SET ig_dm_status = 'sent', ig_dm_sent_at = ?, ig_dm_count = ig_dm_count + 1, updated_at = ? WHERE id = ?",
+        )
+        .run(now, now, id);
+      recordEvent({
+        type: 'prospect.dm',
+        trigger: 'viewer',
+        reason: `Daniel sent the Instagram DM to ${p.company} from his own account.`,
+        data: { prospectId: id, status: 'sent' },
+      });
+    }
+    res.writeHead(303, { Location: '/prospects' });
+    res.end();
+  });
+}
+
+function handleDmReplied(req: IncomingMessage, res: ServerResponse): void {
+  readBody(req, (params) => {
+    const id = params.get('id') ?? '';
+    const now = new Date().toISOString();
+    const p = db().prepare('SELECT company FROM prospects WHERE id = ?').get(id) as { company: string } | undefined;
+    if (p) {
+      db().prepare("UPDATE prospects SET ig_dm_status = 'replied', updated_at = ? WHERE id = ?").run(now, id);
+      recordEvent({
+        type: 'prospect.dm',
+        trigger: 'viewer',
+        reason: `${p.company} replied on Instagram — conversation is live.`,
+        data: { prospectId: id, status: 'replied' },
+      });
+    }
+    res.writeHead(303, { Location: '/prospects' });
+    res.end();
+  });
+}
+
 // ── server ──────────────────────────────────────────────────────────────────
 const server = createServer((req, res) => {
   if (!authorised(req)) return unauthorised(res);
@@ -661,6 +790,9 @@ const server = createServer((req, res) => {
     if (req.method === 'POST' && url.pathname === '/prospect-approve') return handleProspectApprove(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-discard') return handleProspectDiscard(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-instagram') return handleProspectInstagram(req, res);
+    if (req.method === 'POST' && url.pathname === '/prospect-dm') return handleDmWrite(req, res);
+    if (req.method === 'POST' && url.pathname === '/prospect-dm-sent') return handleDmSent(req, res);
+    if (req.method === 'POST' && url.pathname === '/prospect-dm-replied') return handleDmReplied(req, res);
     if (url.pathname === '/prospects')
       return serveProspects(res, {
         approved: url.searchParams.has('approved'),

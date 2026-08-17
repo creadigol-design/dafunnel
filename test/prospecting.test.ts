@@ -198,12 +198,43 @@ describe('knownDomains — dedupe set', () => {
 
   it('migrations created the prospects table incl. the enrichment columns', () => {
     const version = db().pragma('user_version', { simple: true });
-    expect(version).toBe(4);
+    expect(version).toBe(5);
     const cols = (db().prepare("SELECT name FROM pragma_table_info('prospects')").all() as { name: string }[]).map(
       (c) => c.name,
     );
     for (const c of ['evidence_url', 'contact_role', 'contact_source_url', 'enriched_at', 'origin']) {
       expect(cols).toContain(c);
     }
+  });
+});
+
+describe('instagram DM assist', () => {
+  it('lintDm hard-blocks kit terms, links and over-length', async () => {
+    const { lintDm } = await import('../src/prospecting/dm.js');
+    expect(lintDm('Loved your last film — what are you shooting next?').pass).toBe(true);
+    expect(lintDm('We use Brompton processors on set').failures.join()).toContain('kit');
+    expect(lintDm('Check https://vedri.studio for more').failures.join()).toContain('links');
+    expect(lintDm(Array(70).fill('word').join(' ')).failures.join()).toContain('too long');
+    expect(lintDm('Nice? Really? Sure?').failures.join()).toContain('question');
+  });
+
+  it('igHandle extracts the handle from the evidence URL', async () => {
+    const { igHandle } = await import('../src/prospecting/dm.js');
+    expect(igHandle('https://www.instagram.com/some.studio/')).toBe('some.studio');
+    expect(igHandle('https://example.com/whoever')).toBeNull();
+  });
+
+  it('sweepDueDms retires a prospect at the send cap without needing the API', async () => {
+    const { sweepDueDms } = await import('../src/prospecting/dm.js');
+    const old = new Date('2026-08-01T09:00:00.000Z').toISOString();
+    db()
+      .prepare(
+        `INSERT INTO prospects (id, company, evidence_url, status, origin, ig_dm_status, ig_dm_sent_at, ig_dm_count, discovered_at, created_at, updated_at)
+         VALUES ('dm1', '@quietone', 'https://www.instagram.com/quietone/', 'candidate', 'instagram', 'sent', ?, 2, ?, ?, ?)`,
+      )
+      .run(old, old, old, old);
+    await sweepDueDms(new Date('2026-08-17T09:00:00.000Z'));
+    const row = db().prepare("SELECT ig_dm_status FROM prospects WHERE id = 'dm1'").get() as { ig_dm_status: string };
+    expect(row.ig_dm_status).toBe('done');
   });
 });

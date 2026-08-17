@@ -88,6 +88,15 @@ who they are and finds contact details, then they join the same review queue.
 We never automate Instagram itself (scraping/liking bots get accounts banned);
 you spot the engagement, the machine does the research.
 
+**Instagram DMs**: each Instagram prospect card has a DM panel — "Write a DM"
+drafts a short message in the studio voice (same hard rules as email: no kit
+names, no fluff, under 60 words, no links), "Copy DM" + "Open their DMs" put
+it a paste away, and "I've sent it" records the send. Four days of silence and
+the system drafts ONE follow-up and nudges you on Slack; after two DMs with no
+reply it stops and marks them left-in-peace. "They replied" hands the
+conversation back to you (and approving the card moves them to email).
+Only your own thumb ever sends a DM — the system never touches Instagram.
+
 ## 4b. Copy sounds wrong / needs re-doing
 
 After any copy-rule or sequence-guidance change, regenerate the entire unsent

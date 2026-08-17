@@ -12,7 +12,7 @@
  * in a single transaction.
  */
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** Ordered migrations. Index+1 is the version each statement block moves TO. */
 export const MIGRATIONS: string[] = [
@@ -174,5 +174,17 @@ export const MIGRATIONS: string[] = [
   // engagement; enrichment researches who they actually are.
   `
   ALTER TABLE prospects ADD COLUMN origin TEXT NOT NULL DEFAULT 'prospector';
+  `,
+
+  // ── v5: Instagram DM assist — drafted DMs Daniel sends by hand ────────────
+  // The system writes and tracks; only Daniel's own thumb ever sends (DM
+  // automation gets Instagram accounts banned). Status walks
+  // none → drafted → sent → follow_up_due → sent … capped at ig_dm_count 2,
+  // then 'done'; 'replied' at any point hands over to the approve flow.
+  `
+  ALTER TABLE prospects ADD COLUMN ig_dm TEXT;
+  ALTER TABLE prospects ADD COLUMN ig_dm_status TEXT NOT NULL DEFAULT 'none';
+  ALTER TABLE prospects ADD COLUMN ig_dm_sent_at TEXT;
+  ALTER TABLE prospects ADD COLUMN ig_dm_count INTEGER NOT NULL DEFAULT 0;
   `,
 ];
