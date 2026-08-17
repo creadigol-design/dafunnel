@@ -18,7 +18,9 @@ import { log } from '../logger.js';
 import { db } from '../db/index.js';
 import { recordEvent } from '../db/events.js';
 import { eventsForLead } from '../db/events.js';
-import { getLeadByEmail } from '../db/leads.js';
+import { getLeadByEmail, upsertLead } from '../db/leads.js';
+import { isFreemail } from '../ingest/normalise.js';
+import type { Lead } from '../types.js';
 import { renderMessage } from '../copy/render.js';
 import { lintBody } from '../copy/lint.js';
 import { saveDraftToMailbox, sendMail } from '../mail/client.js';
@@ -87,7 +89,7 @@ table{width:100%;border-collapse:collapse;font-size:13.5px}
 td{padding:7px 10px 7px 0;border-top:1px solid var(--line);color:var(--ink2);vertical-align:top}
 .muted{color:var(--muted)}
 </style></head><body><div class="wrap">
-<nav><span class="wordmark">vedr<i>í</i></span><a href="/">dashboard</a><a href="/drafts">drafts</a></nav>
+<nav><span class="wordmark">vedr<i>í</i></span><a href="/">dashboard</a><a href="/drafts">drafts</a><a href="/prospects">prospects</a></nav>
 ${body}</div></body></html>`;
 }
 
@@ -404,6 +406,160 @@ function handleFlag(req: IncomingMessage, res: ServerResponse): void {
   });
 }
 
+// ── prospects (the prospector's review queue) ───────────────────────────────
+interface ProspectRow {
+  id: string;
+  company: string;
+  website: string | null;
+  domain: string | null;
+  location: string | null;
+  category: string | null;
+  track: string;
+  why_fit: string | null;
+  evidence_url: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_page_url: string | null;
+  status: string;
+  discovered_at: string;
+}
+
+function serveProspects(res: ServerResponse, flash: { approved?: boolean; discarded?: boolean; error?: string }): void {
+  const rows = db()
+    .prepare(
+      `SELECT * FROM prospects
+       ORDER BY CASE status WHEN 'candidate' THEN 0 ELSE 1 END, discovered_at DESC
+       LIMIT 100`,
+    )
+    .all() as ProspectRow[];
+  const candidates = rows.filter((r) => r.status === 'candidate').length;
+  const cards = rows
+    .map((p) => {
+      const link = (url: string | null, label: string) =>
+        url ? `<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--lime)">${esc(label)}</a>` : '';
+      const actions =
+        p.status === 'candidate'
+          ? `<div class="actions">
+              <form method="POST" action="/prospect-approve" class="grow">
+                <input type="hidden" name="id" value="${esc(p.id)}">
+                <input type="text" name="email" value="${esc(p.contact_email ?? '')}" placeholder="contact email (find it via their site, then paste here)" required>
+                <button type="submit">Approve → becomes a lead</button>
+              </form>
+              <form method="POST" action="/prospect-discard" class="inline">
+                <input type="hidden" name="id" value="${esc(p.id)}">
+                <button type="submit" class="secondary">Bin it</button>
+              </form>
+            </div>`
+          : `<div class="meta" style="margin-top:10px"><span class="chip ${p.status === 'approved' ? 'hot' : ''}">${esc(p.status)}</span></div>`;
+      return `<div class="card">
+        <div class="meta">
+          <span class="chip">${esc(p.track)}</span>
+          ${p.category ? `<span class="chip">${esc(p.category)}</span>` : ''}
+          ${p.location ? `<span class="chip">${esc(p.location)}</span>` : ''}
+          <span class="muted">${esc(p.discovered_at.slice(0, 10))}</span>
+        </div>
+        <div class="subject">${esc(p.company)}${p.website ? ` · ${link(p.website, p.domain ?? 'site')}` : ''}</div>
+        <div style="color:var(--ink2)">${esc(p.why_fit ?? '')}</div>
+        <div class="meta" style="margin-top:8px">
+          ${link(p.evidence_url, 'evidence ↗')}
+          ${p.contact_page_url ? '· ' + link(p.contact_page_url, 'contact page ↗') : ''}
+          ${p.contact_name ? `· <span class="muted">${esc(p.contact_name)}</span>` : ''}
+        </div>
+        ${actions}
+      </div>`;
+    })
+    .join('');
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(
+    page(
+      'vedrí — prospects',
+      `<h1>Prospects <span class="muted">· ${candidates} awaiting review</span></h1>
+       <p class="muted" style="margin-bottom:16px">Found weekly by the prospector with live web search. Check the evidence link — approving creates a lead for your Built List; binning a company means it is never suggested again. Nobody here is contacted until you approve them AND their sequence goes live.</p>
+       ${flash.approved ? '<div class="ok">✓ Approved — created as a Built List lead. It enters sequencing only when a matching sequence is switched on.</div>' : ''}
+       ${flash.discarded ? '<div class="ok">✓ Binned — this company will not be suggested again.</div>' : ''}
+       ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}
+       ${cards || '<div class="card">No prospects yet — the prospector runs weekly, or run <code>pnpm run prospect</code> on the VPS.</div>'}`,
+    ),
+  );
+}
+
+/** Approve a candidate → create a Built List lead (email is Daniel-confirmed). */
+function handleProspectApprove(req: IncomingMessage, res: ServerResponse): void {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    const params = new URLSearchParams(raw);
+    const id = params.get('id') ?? '';
+    const email = (params.get('email') ?? '').trim().toLowerCase();
+    const fail = (msg: string) => {
+      res.writeHead(303, { Location: `/prospects?error=${encodeURIComponent(msg)}` });
+      res.end();
+    };
+
+    const p = db().prepare("SELECT * FROM prospects WHERE id = ? AND status = 'candidate'").get(id) as
+      | ProspectRow
+      | undefined;
+    if (!p) return fail('Prospect not found or already reviewed.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('A valid contact email is needed to create the lead.');
+    if (db().prepare('SELECT 1 FROM suppression WHERE email = ?').get(email)) {
+      return fail('That email is on the suppression list — cannot create a lead for it.');
+    }
+
+    const lead = upsertLead({
+      email,
+      company: p.company,
+      companyDomain: p.domain,
+      firstName: p.contact_name ? p.contact_name.split(/\s+/)[0]! : null,
+      lastName: p.contact_name ? p.contact_name.split(/\s+/).slice(1).join(' ') || null : null,
+      track: (p.track === 'Studio' || p.track === 'VFX' ? p.track : 'Both') as Lead['track'],
+      source: 'Built List',
+      internalNotes: `Prospector: ${p.why_fit ?? ''} · evidence: ${p.evidence_url}`,
+      liaBasis: `Legitimate interest (B2B relevance) — prospector candidate approved by Daniel; evidence: ${p.evidence_url}`,
+      needsConsent: isFreemail(email),
+    });
+    const now = new Date().toISOString();
+    db()
+      .prepare("UPDATE prospects SET status = 'approved', lead_id = ?, reviewed_at = ?, updated_at = ? WHERE id = ?")
+      .run(lead.id, now, now, id);
+    recordEvent({
+      leadId: lead.id,
+      type: 'prospect.approved',
+      trigger: 'viewer',
+      reason: `Prospect ${p.company} approved by Daniel → Built List lead (${email})`,
+      data: { prospectId: id, company: p.company, domain: p.domain },
+    });
+    vlog.info('prospect approved', { id, company: p.company, email });
+    res.writeHead(303, { Location: '/prospects?approved=1' });
+    res.end();
+  });
+}
+
+function handleProspectDiscard(req: IncomingMessage, res: ServerResponse): void {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    const id = new URLSearchParams(raw).get('id') ?? '';
+    const now = new Date().toISOString();
+    const p = db().prepare("SELECT company FROM prospects WHERE id = ? AND status = 'candidate'").get(id) as
+      | { company: string }
+      | undefined;
+    if (p) {
+      db()
+        .prepare("UPDATE prospects SET status = 'discarded', reviewed_at = ?, updated_at = ? WHERE id = ?")
+        .run(now, now, id);
+      recordEvent({
+        type: 'prospect.discarded',
+        trigger: 'viewer',
+        reason: `Prospect ${p.company} binned by Daniel — will not be suggested again.`,
+        data: { prospectId: id },
+      });
+      vlog.info('prospect discarded', { id, company: p.company });
+    }
+    res.writeHead(303, { Location: '/prospects?discarded=1' });
+    res.end();
+  });
+}
+
 // ── server ──────────────────────────────────────────────────────────────────
 const server = createServer((req, res) => {
   if (!authorised(req)) return unauthorised(res);
@@ -412,6 +568,14 @@ const server = createServer((req, res) => {
     if (req.method === 'POST' && url.pathname === '/flag') return handleFlag(req, res);
     if (req.method === 'POST' && url.pathname === '/approve') return handleApprove(req, res);
     if (req.method === 'POST' && url.pathname === '/edit') return handleEdit(req, res);
+    if (req.method === 'POST' && url.pathname === '/prospect-approve') return handleProspectApprove(req, res);
+    if (req.method === 'POST' && url.pathname === '/prospect-discard') return handleProspectDiscard(req, res);
+    if (url.pathname === '/prospects')
+      return serveProspects(res, {
+        approved: url.searchParams.has('approved'),
+        discarded: url.searchParams.has('discarded'),
+        error: url.searchParams.get('error') ?? undefined,
+      });
     if (url.pathname === '/' || url.pathname === '/dashboard') return serveDashboard(res);
     if (url.pathname === '/draft')
       return serveDraftDetail(res, url.searchParams.get('id') ?? '', {

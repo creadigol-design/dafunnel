@@ -231,6 +231,7 @@ footer{margin-top:26px;color:var(--muted);font-size:12px}
     <div class="wordmark">vedr<i>í</i></div>
     <div class="sub">sales funnel · updated ${esc(updated)}</div>
     <a class="navlink" href="/drafts">review drafts →</a>
+    <a class="navlink" style="margin-left:10px" href="/prospects">prospects →</a>
     <span class="badge ${config.dryRun ? 'shadow' : ''}">${config.dryRun ? 'shadow mode — nothing sends' : 'live'}</span>
   </header>
 

@@ -37,6 +37,44 @@ export async function complete(opts: CompleteOptions): Promise<string> {
     .join('');
 }
 
+export interface WebSearchCompleteOptions {
+  system: string;
+  user: string;
+  maxTokens?: number;
+  /** Cap on server-side web searches per request (cost control). */
+  maxSearches?: number;
+}
+
+/**
+ * Single-turn completion with the server-side web search tool enabled. The
+ * search loop runs entirely on Anthropic's side — the response we get back is
+ * the final text, with search/result blocks interleaved (we keep text only).
+ */
+export async function completeWithWebSearch(opts: WebSearchCompleteOptions): Promise<string> {
+  // Streamed: a server-side search loop can run for many minutes, and a
+  // non-streaming request would sit against the client timeout the whole way.
+  const stream = anthropic().messages.stream({
+    model: config.anthropic.model,
+    max_tokens: opts.maxTokens ?? 8192,
+    system: opts.system,
+    messages: [{ role: 'user', content: opts.user }],
+    // web_search_20260209 is current for the Claude 5 / 4.6+ tier; the SDK's
+    // tool union may trail the API, hence the cast.
+    tools: [
+      {
+        type: 'web_search_20260209',
+        name: 'web_search',
+        max_uses: opts.maxSearches ?? 12,
+      } as unknown as Anthropic.Messages.ToolUnion,
+    ],
+  });
+  const msg = await stream.finalMessage();
+  return msg.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+}
+
 /** Parse a JSON object out of a model response (tolerates prose/code fences). */
 export function extractJson<T>(text: string): T {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);

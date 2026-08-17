@@ -63,6 +63,33 @@ reason string for each. This answers 95% of "why" questions.
    ```
    Suppression is checked before every send, permanently.
 
+## 4a. The prospector (finding NEW companies)
+
+The prospector runs weekly inside the cycle: Claude with live web search hunts
+UK/Ireland production companies, agencies and post houses matching the ICP,
+each with a source link backing the "why it fits" claim. Candidates land in
+the portal under **/prospects** — nothing is contacted until you approve one
+there (approving needs a contact email; find it via their site or contact page
+and paste it in). Binning a company is permanent — it is never suggested again.
+
+- Run one now: `pnpm run prospect`
+- Approved candidates become **Built List** leads. They only enter sequencing
+  when a matching sequence (A1/A2/B1/B2) is in `SEQUENCES_ACTIVE` — so during
+  the shadow fortnight they just sit as leads, safe.
+
+## 4b. Copy sounds wrong / needs re-doing
+
+After any copy-rule or sequence-guidance change, regenerate the entire unsent
+queue in one command:
+
+```bash
+pnpm run redraft
+```
+
+Deletes every pending/flagged draft (sent and approved are untouched), rewinds
+each lead's sequence to the discarded step, and regenerates immediately under
+the current rules. Review in the portal as usual.
+
 ## 5. Moving / rebuilding the VPS
 
 Everything that matters is three things: this repo, `.env`, and

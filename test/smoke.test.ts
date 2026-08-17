@@ -45,13 +45,13 @@ describe('database + migrations', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all()
       .map((r) => (r as { name: string }).name);
-    for (const t of ['leads', 'events', 'suppression', 'drafts', 'alerts_log', 'cycle_runs', 'sync_state']) {
+    for (const t of ['leads', 'events', 'suppression', 'drafts', 'alerts_log', 'cycle_runs', 'sync_state', 'prospects']) {
       expect(names).toContain(t);
     }
   });
 
   it('sets the schema version', () => {
-    expect(db().pragma('user_version', { simple: true })).toBe(1);
+    expect(db().pragma('user_version', { simple: true })).toBe(2);
   });
 });
 

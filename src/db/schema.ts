@@ -12,7 +12,7 @@
  * in a single transaction.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** Ordered migrations. Index+1 is the version each statement block moves TO. */
 export const MIGRATIONS: string[] = [
@@ -127,5 +127,35 @@ export const MIGRATIONS: string[] = [
     value       TEXT NOT NULL,
     updated_at  TEXT NOT NULL
   );
+  `,
+
+  // ── v2: prospector — web-search-discovered candidates awaiting review ─────
+  // Candidates are NOT leads: nothing contacts them, scores them or syncs them
+  // to HubSpot until Daniel approves one in the viewer (which creates a
+  // Built List lead). Discard is terminal but kept, so a discarded company is
+  // never re-suggested (the domain stays in the dedupe set).
+  `
+  CREATE TABLE IF NOT EXISTS prospects (
+    id               TEXT PRIMARY KEY,
+    company          TEXT NOT NULL,
+    website          TEXT,
+    domain           TEXT,          -- normalised; dedupe key vs leads + prospects
+    location         TEXT,
+    category         TEXT,          -- prodco | agency | post house | brand studio | other
+    track            TEXT NOT NULL DEFAULT 'Both',
+    why_fit          TEXT,          -- one-line ICP-fit reason
+    evidence_url     TEXT NOT NULL, -- source page backing the why_fit claim
+    contact_name     TEXT,
+    contact_email    TEXT,
+    contact_page_url TEXT,
+    status           TEXT NOT NULL DEFAULT 'candidate',  -- candidate|approved|discarded
+    lead_id          TEXT,          -- set when approved → the created lead
+    discovered_at    TEXT NOT NULL,
+    reviewed_at      TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_prospects_domain ON prospects(domain);
+  CREATE INDEX IF NOT EXISTS idx_prospects_status ON prospects(status);
   `,
 ];

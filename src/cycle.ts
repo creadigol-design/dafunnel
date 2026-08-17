@@ -21,6 +21,7 @@ import { runScoring } from './scoring.js';
 import { runSequences } from './sequences/engine.js';
 import { pollReplies } from './replies/poll.js';
 import { runGovernor } from './governor.js';
+import { runProspector } from './prospecting/discover.js';
 import { deliverAlerts, maybeSendDailyDigest } from './alerts/deliver.js';
 import { generateDashboard } from './dashboard.js';
 
@@ -108,6 +109,18 @@ const STEPS: Step[] = [
           unknown: s.unknown,
         },
         ...(s.skipped ? { note: 'IMAP unavailable or MAIL_PASS unset' } : {}),
+      };
+    },
+  },
+  {
+    name: 'prospect',
+    run: async () => {
+      const s = await runProspector();
+      return {
+        name: 'prospect',
+        status: s.skippedReason ? 'skipped' : 'ok',
+        ...(s.ran ? { counts: { found: s.found, queued: s.queued, duplicates: s.duplicates } } : {}),
+        note: s.skippedReason ?? (s.ran ? undefined : 'not due (runs weekly)'),
       };
     },
   },
