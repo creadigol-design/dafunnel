@@ -16,6 +16,7 @@
     "draft-batch": "tsx scripts/draft-batch.ts",
     "redraft": "tsx scripts/redraft-pending.ts",
     "prospect": "tsx scripts/prospect.ts",
+    "enrich": "tsx scripts/enrich-prospects.ts",
     "import-csv": "tsx scripts/import-csv.ts",
     "log-touch": "tsx scripts/log-touch.ts",
     "doctor": "tsx scripts/doctor.ts",

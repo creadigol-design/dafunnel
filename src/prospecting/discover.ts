@@ -20,6 +20,7 @@ import { recordEvent } from '../db/events.js';
 import { queueAlert } from '../alerts/queue.js';
 import { completeWithWebSearch } from '../anthropic.js';
 import { FREEMAIL_DOMAINS, extractDomain } from '../ingest/normalise.js';
+import { enrichCandidates } from './enrich.js';
 
 const plog = log.child('prospector');
 
@@ -252,6 +253,15 @@ export async function runProspector(asOf: Date = new Date(), force = false): Pro
   }
 
   setSyncState(LAST_RUN_KEY, now);
+
+  // Second stage: per-company lookup for the best person to pitch and their
+  // published email. Failures here never sink the discovery result.
+  try {
+    await enrichCandidates();
+  } catch (err) {
+    plog.warn('enrichment stage failed', { error: err instanceof Error ? err.message : String(err) });
+  }
+
   if (summary.queued > 0) {
     queueAlert('prospects_found', {
       payload: {

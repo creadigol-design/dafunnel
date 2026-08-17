@@ -20,7 +20,9 @@ import { recordEvent } from '../db/events.js';
 import { eventsForLead } from '../db/events.js';
 import { getLeadByEmail, upsertLead } from '../db/leads.js';
 import { isFreemail } from '../ingest/normalise.js';
+import { enrichCandidates } from '../prospecting/enrich.js';
 import type { Lead } from '../types.js';
+import { randomUUID } from 'node:crypto';
 import { renderMessage } from '../copy/render.js';
 import { lintBody } from '../copy/lint.js';
 import { saveDraftToMailbox, sendMail } from '../mail/client.js';
@@ -418,13 +420,20 @@ interface ProspectRow {
   why_fit: string | null;
   evidence_url: string;
   contact_name: string | null;
+  contact_role: string | null;
   contact_email: string | null;
   contact_page_url: string | null;
+  contact_source_url: string | null;
+  enriched_at: string | null;
+  origin: string;
   status: string;
   discovered_at: string;
 }
 
-function serveProspects(res: ServerResponse, flash: { approved?: boolean; discarded?: boolean; error?: string }): void {
+function serveProspects(
+  res: ServerResponse,
+  flash: { approved?: boolean; discarded?: boolean; added?: string; dup?: string; error?: string },
+): void {
   const rows = db()
     .prepare(
       `SELECT * FROM prospects
@@ -453,6 +462,7 @@ function serveProspects(res: ServerResponse, flash: { approved?: boolean; discar
           : `<div class="meta" style="margin-top:10px"><span class="chip ${p.status === 'approved' ? 'hot' : ''}">${esc(p.status)}</span></div>`;
       return `<div class="card">
         <div class="meta">
+          ${p.origin === 'instagram' ? '<span class="chip flagged">instagram</span>' : ''}
           <span class="chip">${esc(p.track)}</span>
           ${p.category ? `<span class="chip">${esc(p.category)}</span>` : ''}
           ${p.location ? `<span class="chip">${esc(p.location)}</span>` : ''}
@@ -460,10 +470,16 @@ function serveProspects(res: ServerResponse, flash: { approved?: boolean; discar
         </div>
         <div class="subject">${esc(p.company)}${p.website ? ` · ${link(p.website, p.domain ?? 'site')}` : ''}</div>
         <div style="color:var(--ink2)">${esc(p.why_fit ?? '')}</div>
+        ${
+          p.contact_name || p.contact_email
+            ? `<div class="meta" style="margin-top:8px"><span class="chip warm">contact: ${esc(p.contact_name ?? 'role inbox')}${p.contact_role ? ` — ${esc(p.contact_role)}` : ''}${p.contact_email ? ` · ${esc(p.contact_email)}` : ' · no published email'}</span>${p.contact_source_url ? ' ' + link(p.contact_source_url, 'where we found it ↗') : ''}</div>`
+            : p.enriched_at
+              ? `<div class="meta" style="margin-top:8px"><span class="muted">No published contact found — check their site by hand.</span></div>`
+              : ''
+        }
         <div class="meta" style="margin-top:8px">
           ${link(p.evidence_url, 'evidence ↗')}
           ${p.contact_page_url ? '· ' + link(p.contact_page_url, 'contact page ↗') : ''}
-          ${p.contact_name ? `· <span class="muted">${esc(p.contact_name)}</span>` : ''}
         </div>
         ${actions}
       </div>`;
@@ -477,7 +493,16 @@ function serveProspects(res: ServerResponse, flash: { approved?: boolean; discar
        <p class="muted" style="margin-bottom:16px">Found weekly by the prospector with live web search. Check the evidence link — approving creates a lead for your Built List; binning a company means it is never suggested again. Nobody here is contacted until you approve them AND their sequence goes live.</p>
        ${flash.approved ? '<div class="ok">✓ Approved — created as a Built List lead. It enters sequencing only when a matching sequence is switched on.</div>' : ''}
        ${flash.discarded ? '<div class="ok">✓ Binned — this company will not be suggested again.</div>' : ''}
+       ${flash.added ? `<div class="ok">✓ Queued ${esc(flash.added)} Instagram account(s)${flash.dup && flash.dup !== '0' ? ` (${esc(flash.dup)} already known)` : ''} — research starts now and fills in who they are within a few minutes. Refresh to see it land.</div>` : ''}
        ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}
+       <div class="card">
+         <div class="subject">Add from Instagram</div>
+         <div class="muted" style="margin-bottom:8px">Seen someone liking, commenting or following vedri.studio? Paste their handle(s) here — I'll work out who they are, find their website and the best person to contact, and queue them below. Separate several with spaces or commas.</div>
+         <form method="POST" action="/prospect-instagram">
+           <input type="text" name="handles" placeholder="@somestudio, @another.account" required>
+           <button type="submit">Research them</button>
+         </form>
+       </div>
        ${cards || '<div class="card">No prospects yet — the prospector runs weekly, or run <code>pnpm run prospect</code> on the VPS.</div>'}`,
     ),
   );
@@ -513,7 +538,7 @@ function handleProspectApprove(req: IncomingMessage, res: ServerResponse): void 
       lastName: p.contact_name ? p.contact_name.split(/\s+/).slice(1).join(' ') || null : null,
       track: (p.track === 'Studio' || p.track === 'VFX' ? p.track : 'Both') as Lead['track'],
       source: 'Built List',
-      internalNotes: `Prospector: ${p.why_fit ?? ''} · evidence: ${p.evidence_url}`,
+      internalNotes: `Prospector: ${p.why_fit ?? ''} · evidence: ${p.evidence_url}${p.contact_role ? ` · contact role: ${p.contact_role}` : ''}`,
       liaBasis: `Legitimate interest (B2B relevance) — prospector candidate approved by Daniel; evidence: ${p.evidence_url}`,
       needsConsent: isFreemail(email),
     });
@@ -530,6 +555,71 @@ function handleProspectApprove(req: IncomingMessage, res: ServerResponse): void 
     });
     vlog.info('prospect approved', { id, company: p.company, email });
     res.writeHead(303, { Location: '/prospects?approved=1' });
+    res.end();
+  });
+}
+
+/**
+ * Instagram intake — Daniel pastes handles of accounts engaging with
+ * vedri.studio; each becomes a candidate and the research (who are they, best
+ * contact, published email) kicks off in the background. We never automate
+ * Instagram itself — that's how accounts get banned.
+ */
+function handleProspectInstagram(req: IncomingMessage, res: ServerResponse): void {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    const input = (new URLSearchParams(raw).get('handles') ?? '').slice(0, 2000);
+    const handles = [
+      ...new Set(
+        input
+          .split(/[\s,;]+/)
+          .map((h) => h.trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/\/.*$/, '').toLowerCase())
+          .filter((h) => /^[a-z0-9._]{1,30}$/.test(h)),
+      ),
+    ];
+    if (handles.length === 0) {
+      res.writeHead(303, { Location: `/prospects?error=${encodeURIComponent('No valid Instagram handles found in that — paste them like @somestudio.')}` });
+      res.end();
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let added = 0;
+    let dup = 0;
+    for (const h of handles) {
+      const evidenceUrl = `https://www.instagram.com/${h}/`;
+      if (db().prepare('SELECT 1 FROM prospects WHERE evidence_url = ?').get(evidenceUrl)) {
+        dup++;
+        continue;
+      }
+      const id = randomUUID();
+      db()
+        .prepare(
+          `INSERT INTO prospects (id, company, track, why_fit, evidence_url, status, origin, discovered_at, created_at, updated_at)
+           VALUES (?, ?, 'Both', ?, ?, 'candidate', 'instagram', ?, ?, ?)`,
+        )
+        .run(id, `@${h}`, 'Engaged with vedri.studio on Instagram — research pending.', evidenceUrl, now, now, now);
+      recordEvent({
+        type: 'prospect.discovered',
+        trigger: 'instagram-intake',
+        reason: `Instagram account @${h} added by Daniel from vedri.studio engagement — research queued.`,
+        data: { prospectId: id, handle: h },
+      });
+      added++;
+    }
+
+    if (added > 0) {
+      // Fire-and-forget: the research runs in this process while Daniel gets
+      // an immediate response; refreshing the page shows results as they land.
+      enrichCandidates(added).catch((err) =>
+        vlog.warn('instagram research failed — the hourly cycle will retry', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+    vlog.info('instagram handles queued', { added, dup });
+    res.writeHead(303, { Location: `/prospects?added=${added}&dup=${dup}` });
     res.end();
   });
 }
@@ -570,10 +660,13 @@ const server = createServer((req, res) => {
     if (req.method === 'POST' && url.pathname === '/edit') return handleEdit(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-approve') return handleProspectApprove(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-discard') return handleProspectDiscard(req, res);
+    if (req.method === 'POST' && url.pathname === '/prospect-instagram') return handleProspectInstagram(req, res);
     if (url.pathname === '/prospects')
       return serveProspects(res, {
         approved: url.searchParams.has('approved'),
         discarded: url.searchParams.has('discarded'),
+        added: url.searchParams.get('added') ?? undefined,
+        dup: url.searchParams.get('dup') ?? undefined,
         error: url.searchParams.get('error') ?? undefined,
       });
     if (url.pathname === '/' || url.pathname === '/dashboard') return serveDashboard(res);

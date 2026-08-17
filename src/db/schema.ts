@@ -12,7 +12,7 @@
  * in a single transaction.
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 /** Ordered migrations. Index+1 is the version each statement block moves TO. */
 export const MIGRATIONS: string[] = [
@@ -157,5 +157,22 @@ export const MIGRATIONS: string[] = [
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_prospects_domain ON prospects(domain);
   CREATE INDEX IF NOT EXISTS idx_prospects_status ON prospects(status);
+  `,
+
+  // ── v3: prospect contact enrichment — who to pitch, with published evidence ─
+  // contact_source_url records WHERE the name/email was published (the honesty
+  // rule); enriched_at marks a candidate as looked-up so an empty result is not
+  // re-searched every run.
+  `
+  ALTER TABLE prospects ADD COLUMN contact_role TEXT;
+  ALTER TABLE prospects ADD COLUMN contact_source_url TEXT;
+  ALTER TABLE prospects ADD COLUMN enriched_at TEXT;
+  `,
+
+  // ── v4: where a prospect came from — the weekly hunt or Instagram intake ──
+  // 'instagram' rows start as a bare handle Daniel pasted from vedri.studio's
+  // engagement; enrichment researches who they actually are.
+  `
+  ALTER TABLE prospects ADD COLUMN origin TEXT NOT NULL DEFAULT 'prospector';
   `,
 ];

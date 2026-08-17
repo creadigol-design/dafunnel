@@ -77,6 +77,17 @@ and paste it in). Binning a company is permanent — it is never suggested again
   when a matching sequence (A1/A2/B1/B2) is in `SEQUENCES_ACTIVE` — so during
   the shadow fortnight they just sit as leads, safe.
 
+After discovery, each candidate gets a **contact lookup**: a focused search for
+the best person to pitch (founder / MD / executive producer / head of
+production) and their *published* email — never a guessed one; the source page
+is linked on the card. Backfill or retry with `pnpm run enrich`.
+
+**Instagram intake**: on the /prospects page, paste handles of accounts that
+like/comment/follow vedri.studio ("Add from Instagram") — the system researches
+who they are and finds contact details, then they join the same review queue.
+We never automate Instagram itself (scraping/liking bots get accounts banned);
+you spot the engagement, the machine does the research.
+
 ## 4b. Copy sounds wrong / needs re-doing
 
 After any copy-rule or sequence-guidance change, regenerate the entire unsent

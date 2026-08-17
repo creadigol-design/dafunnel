@@ -51,7 +51,7 @@ describe('database + migrations', () => {
   });
 
   it('sets the schema version', () => {
-    expect(db().pragma('user_version', { simple: true })).toBe(2);
+    expect(db().pragma('user_version', { simple: true })).toBe(4);
   });
 });
 

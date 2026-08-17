@@ -23,6 +23,7 @@ const { upsertLead } = await import('../src/db/leads.js');
 const { normaliseDomain, parseCandidates, prospectorDue, knownDomains } = await import(
   '../src/prospecting/discover.js'
 );
+const { parseContact, parseIgResearch } = await import('../src/prospecting/enrich.js');
 
 afterAll(() => {
   closeDb();
@@ -103,6 +104,66 @@ describe('parseCandidates — the honesty gate', () => {
   });
 });
 
+describe('parseContact — enrichment honesty gate', () => {
+  it('keeps a published contact with its source page', () => {
+    const c = parseContact(
+      JSON.stringify({
+        contactName: 'Sam Jones',
+        contactRole: 'Executive Producer',
+        contactEmail: 'sam@alphafilms.co.uk',
+        contactPageUrl: 'https://alphafilms.co.uk/contact',
+        sourceUrl: 'https://alphafilms.co.uk/team',
+      }),
+    );
+    expect(c.contactEmail).toBe('sam@alphafilms.co.uk');
+    expect(c.contactRole).toBe('Executive Producer');
+  });
+
+  it('drops an email with no published source — that is a guess', () => {
+    const c = parseContact(
+      JSON.stringify({ contactName: 'Sam Jones', contactEmail: 'sam@alphafilms.co.uk', sourceUrl: null }),
+    );
+    expect(c.contactEmail).toBeNull();
+    expect(c.contactName).toBe('Sam Jones');
+  });
+
+  it('drops malformed emails and "null" strings; survives junk', () => {
+    const c = parseContact(
+      JSON.stringify({ contactName: 'null', contactEmail: 'not-an-email', sourceUrl: 'https://x.co/team' }),
+    );
+    expect(c.contactName).toBeNull();
+    expect(c.contactEmail).toBeNull();
+    expect(parseContact('total junk').contactEmail).toBeNull();
+  });
+});
+
+describe('parseIgResearch — Instagram account research', () => {
+  it('fills in who the account is, honesty rules intact', () => {
+    const r = parseIgResearch(
+      JSON.stringify({
+        company: 'Beta Studios',
+        website: 'https://betastudios.ie',
+        location: 'Dublin',
+        category: 'prodco',
+        whyFit: 'Makes branded docs for Irish tech firms.',
+        contactName: 'Ana Silva',
+        contactRole: 'Founder',
+        contactEmail: 'ana@betastudios.ie',
+        contactPageUrl: null,
+        sourceUrl: 'https://betastudios.ie/about',
+      }),
+    );
+    expect(r.company).toBe('Beta Studios');
+    expect(r.contactEmail).toBe('ana@betastudios.ie');
+  });
+
+  it('an email without a source page is still dropped', () => {
+    const r = parseIgResearch(JSON.stringify({ company: 'Beta', contactEmail: 'x@beta.ie', sourceUrl: null }));
+    expect(r.contactEmail).toBeNull();
+    expect(r.company).toBe('Beta');
+  });
+});
+
 describe('prospectorDue — weekly gate', () => {
   const now = new Date('2026-08-17T09:00:00.000Z');
   it('due when never run, or a week has passed; force always wins', () => {
@@ -135,10 +196,14 @@ describe('knownDomains — dedupe set', () => {
     expect(known.has('gmail.com')).toBe(false);
   });
 
-  it('migration v2 created the prospects table with the status/domain indexes', () => {
+  it('migrations created the prospects table incl. the enrichment columns', () => {
     const version = db().pragma('user_version', { simple: true });
-    expect(version).toBe(2);
-    const cols = db().prepare("SELECT name FROM pragma_table_info('prospects')").all() as { name: string }[];
-    expect(cols.map((c) => c.name)).toContain('evidence_url');
+    expect(version).toBe(4);
+    const cols = (db().prepare("SELECT name FROM pragma_table_info('prospects')").all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    for (const c of ['evidence_url', 'contact_role', 'contact_source_url', 'enriched_at', 'origin']) {
+      expect(cols).toContain(c);
+    }
   });
 });
