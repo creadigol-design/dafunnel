@@ -86,11 +86,11 @@ function gather(asOf: Date) {
 
   const drafts = d
     .prepare(
-      `SELECT dr.subject, dr.sequence_id, dr.step, dr.status, l.email, l.company
+      `SELECT dr.id, dr.subject, dr.sequence_id, dr.step, dr.status, l.email, l.company
        FROM drafts dr LEFT JOIN leads l ON l.id = dr.lead_id
        WHERE dr.status IN ('pending','lint_failed') ORDER BY dr.created_at DESC LIMIT 12`,
     )
-    .all() as { subject: string; sequence_id: string; step: number; status: string; email: string; company: string | null }[];
+    .all() as { id: string; subject: string; sequence_id: string; step: number; status: string; email: string; company: string | null }[];
 
   const week = new Date(asOf.getTime() + 7 * 86_400_000).toISOString();
   const touches = d
@@ -134,11 +134,11 @@ function fmtWhen(iso: string | null): string {
 const BAND_ACCENTS: Record<string, string> = { Hot: '#9FCC3B', Warm: '#B8E040', Cold: '#8A8A8E', Nurture: '#8A8A8E' };
 
 function leadCard(l: LeadRow): string {
-  return `<div class="lead" title="${esc(l.email)}">
+  return `<a class="lead" title="${esc(l.email)}" href="/lead?email=${encodeURIComponent(l.email)}">
     <div class="lead-name">${esc(name(l))}</div>
     <div class="lead-co">${esc(l.company ?? '')}</div>
     <div class="lead-score">${l.score}</div>
-  </div>`;
+  </a>`;
 }
 
 export function renderDashboard(asOf: Date = new Date()): string {
@@ -175,8 +175,14 @@ header{display:flex;align-items:baseline;gap:16px;margin-bottom:28px;flex-wrap:w
 .wordmark{font-weight:700;font-size:34px;letter-spacing:-.5px}
 .wordmark i{font-style:normal;color:var(--green)}
 .sub{color:var(--muted);font-size:13px}
-.badge{margin-left:auto;font-size:12px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink2)}
+.badge{font-size:12px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink2)}
 .badge.shadow{border-color:rgba(159,204,59,.45);color:var(--lime)}
+.navlink{margin-left:auto;font-size:14px;font-weight:700;color:var(--green);text-decoration:none;padding:4px 12px;border:1px solid rgba(159,204,59,.45);border-radius:999px}
+.navlink:hover{color:#111118;background:var(--green)}
+.navlink.small{margin-left:12px;font-size:11px;font-weight:400;letter-spacing:normal;text-transform:none;padding:2px 10px}
+.rowlink{color:var(--ink2);text-decoration:none}
+.rowlink:hover{color:var(--lime)}
+a.lead{text-decoration:none;color:inherit;cursor:pointer}
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
 .card h2{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
@@ -224,6 +230,7 @@ footer{margin-top:26px;color:var(--muted);font-size:12px}
   <header>
     <div class="wordmark">vedr<i>í</i></div>
     <div class="sub">sales funnel · updated ${esc(updated)}</div>
+    <a class="navlink" href="/drafts">review drafts →</a>
     <span class="badge ${config.dryRun ? 'shadow' : ''}">${config.dryRun ? 'shadow mode — nothing sends' : 'live'}</span>
   </header>
 
@@ -259,14 +266,14 @@ footer{margin-top:26px;color:var(--muted);font-size:12px}
     </div>
 
     <div class="card span8">
-      <h2>Drafts awaiting approval</h2>
+      <h2>Drafts awaiting approval <a class="navlink small" href="/drafts">open the review queue →</a></h2>
       ${
         g.drafts.length
           ? `<table><tr><th>To</th><th>Subject</th><th>Sequence</th><th></th></tr>${g.drafts
               .map(
                 (d) => `<tr><td class="k">${esc(d.email)}${d.company ? ` <span class="chip">${esc(d.company)}</span>` : ''}</td>
-              <td>${esc(d.subject)}</td><td>${esc(d.sequence_id)} · s${d.step + 1}</td>
-              <td>${d.status === 'lint_failed' ? '<span class="chip flag">flagged</span>' : ''}</td></tr>`,
+              <td><a class="rowlink" href="/draft?id=${esc(d.id)}">${esc(d.subject)}</a></td><td>${esc(d.sequence_id)} · s${d.step + 1}</td>
+              <td><a class="rowlink" href="/draft?id=${esc(d.id)}">${d.status === 'lint_failed' ? '<span class="chip flag">fix</span>' : 'review →'}</a></td></tr>`,
               )
               .join('')}</table>`
           : '<div class="empty">nothing waiting — inbox zero</div>'
