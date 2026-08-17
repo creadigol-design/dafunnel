@@ -4,11 +4,12 @@
  */
 import { getLeadByEmail } from '../src/db/leads.js';
 import { generateDraft, type StepSpec } from '../src/copy/generate.js';
+import { selectSequence } from '../src/sequences/load.js';
 import { closeDb } from '../src/db/index.js';
 
 const email = process.argv[2];
 if (!email) {
-  console.error('Usage: pnpm run sample-draft <email>');
+  console.error('Usage: pnpm run sample-draft <email> [step]');
   process.exit(2);
 }
 
@@ -19,13 +20,21 @@ if (!lead) {
   process.exit(1);
 }
 
-// A3 reactivation, step 1: "lead with what's changed since we last spoke".
+// Use the lead's real sequence + step definition so the preview matches what
+// the engine would actually produce.
+const seq = selectSequence(lead);
+if (!seq) {
+  console.error(`No sequence matches ${email} (track ${lead.track}, source ${lead.source})`);
+  closeDb();
+  process.exit(1);
+}
+const stepIndex = Math.min(process.argv[3] ? Number(process.argv[3]) - 1 : 0, seq.steps.length - 1);
+const stepDef = seq.steps[stepIndex]!;
 const step: StepSpec = {
-  sequenceId: 'A3-reactivation',
-  stepIndex: 0,
-  purpose: 'Reactivate a past conversation by leading with what has changed since we last spoke.',
-  guidance:
-    'Open by acknowledging we spoke before (use the relationship context). Lead with a concrete capability that is genuinely useful to them now — not "just checking in". One specific, low-friction ask at the end (a short call or a reply).',
+  sequenceId: seq.id,
+  stepIndex,
+  purpose: stepDef.purpose,
+  guidance: stepDef.guidance,
 };
 
 const draft = await generateDraft(lead, step);

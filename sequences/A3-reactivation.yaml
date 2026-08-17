@@ -1,5 +1,6 @@
 # A3 — Reactivation (Track A / Studio). Past clients + dead quotes.
-# Lead with what has CHANGED since we last spoke, never "just checking in".
+# These people already know us (or have at least heard from us). The register is
+# a personal note from Daniel — one thought, no capability lists, never a pitch.
 id: A3-reactivation
 track: Studio
 sources: [Past Client, Referral, Other]
@@ -7,21 +8,26 @@ fromMailbox: warm
 cold: false
 steps:
   - dayOffset: 0
-    purpose: Reopen the conversation by leading with a concrete change since we last spoke.
+    purpose: Restart a human conversation — a short personal note, not a sales email.
     guidance: >
-      Acknowledge we spoke before (use the relationship context). Lead with one
-      genuinely useful capability that is new or sharper now — not a check-in.
-      End with a low-friction ask: a short call via the booking link, or a reply.
+      Match the relationship context exactly (a real conversation vs a one-way
+      reach-out). This is a note, not a pitch: one thought only. Ask a genuine
+      question about what they are making at the moment — that question IS the
+      email. If one concrete change at our end fits naturally in a single line,
+      mention it; otherwise leave it out. No lists of what we do. Low-friction
+      close: a reply beats a booking link here.
     exitConditions: [reply, booked, unsubscribed]
   - dayOffset: 5
-    purpose: Add a second concrete angle and make the value specific to their kind of work.
+    purpose: One specific thought relevant to their kind of work. Still a note.
     guidance: >
-      Reference the studio/VP angle most relevant to their previous project.
-      One useful, specific point. Soft ask, no pressure.
+      Pick ONE angle that fits the work they actually do and say something
+      useful about it in a sentence or two — an observation, not a feature.
+      Do not repeat step 1 and do not add a second angle. Soft ask, no pressure.
     exitConditions: [reply, booked, unsubscribed]
   - dayOffset: 14
     purpose: Graceful breakup — give them an easy out, which is what gets replies.
     guidance: >
-      Short. "Still live, or has this moved on?" Make it effortless to say either.
-      This is the highest-reply touch — write it properly.
+      Short. "Still live, or has this moved on?" Make it effortless to say
+      either. No facts, no selling. This is the highest-reply touch — write it
+      like a person, not a system.
     exitConditions: [reply, booked, unsubscribed]

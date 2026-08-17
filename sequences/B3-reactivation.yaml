@@ -1,4 +1,5 @@
 # B3 — Reactivation (Track B / VFX). Past post/finishing clients + dead quotes.
+# Same register as A3: a personal note from Daniel — one thought, never a pitch.
 id: B3-reactivation
 track: VFX
 sources: [Past Client, Referral, Other]
@@ -6,14 +7,24 @@ fromMailbox: warm
 cold: false
 steps:
   - dayOffset: 0
-    purpose: Reopen with what has changed in our post/finishing capacity since we last spoke.
-    guidance: Acknowledge the prior conversation; lead with a concrete finishing capability, not a check-in. Low-friction ask.
+    purpose: Restart a human conversation — a short personal note, not a sales email.
+    guidance: >
+      Match the relationship context exactly (a real conversation vs a one-way
+      reach-out). One thought only: ask a genuine question about what they are
+      cutting or finishing at the moment. Mention one concrete change at our
+      end only if it fits in a single natural line. No capability lists.
+      A reply beats a booking link here.
     exitConditions: [reply, booked, unsubscribed]
   - dayOffset: 5
-    purpose: A second concrete angle specific to their finishing needs (comp, cleanup, green-screen finishing).
-    guidance: One specific, useful point about the post work most relevant to them.
+    purpose: One specific thought about the post work most relevant to them. Still a note.
+    guidance: >
+      ONE angle (comp, cleanup, green-screen finishing — whichever fits their
+      work), said as an observation in a sentence or two, not a feature. Do not
+      repeat step 1 or add a second angle. Soft ask.
     exitConditions: [reply, booked, unsubscribed]
   - dayOffset: 14
     purpose: Graceful breakup.
-    guidance: Short. "Still live, or has this moved on?" Easy to answer either way.
+    guidance: >
+      Short. "Still live, or has this moved on?" Easy to answer either way.
+      No facts, no selling.
     exitConditions: [reply, booked, unsubscribed]

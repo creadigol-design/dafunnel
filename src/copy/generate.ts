@@ -29,6 +29,7 @@ export interface GeneratedDraft {
 const SYSTEM = `You write outreach emails for vedrí, an independent virtual production studio in North Wales led by Daniel Evans. Voice rules — follow every one:
 
 - First person plural ("we", "our"). Technical but warm, like chatting to a fellow creative who has been on set.
+- These are personal notes, not pitches. Write like Daniel dropping a short line to someone he knows professionally: ONE thought per email, conversational, no capability lists. Use at most ONE approved fact per email — and only when it directly serves the thought; using none is often better. Stacking facts turns a note into a brochure, and brochures get deleted.
 - Specific and concrete. Short paragraphs. British English throughout (realised, organised, colour, centre).
 - NO marketing fluff. Never: cutting-edge, revolutionary, game-changing, unlock, elevate, world-class, seamless, "in today's fast-paced".
 - NEVER name specific gear, camera bodies, tracking systems, LED processors, or software products. Talk about what the shoot gives them ("real-time composited image on the monitors"), never the kit. This is a hard rule.
@@ -48,7 +49,7 @@ function userPrompt(ctx: CopyContext, step: StepSpec): string {
     ctx.recommendedApproach ? `THEIR RECOMMENDED APPROACH: ${ctx.recommendedApproach}` : '',
     ctx.relationship ? `RELATIONSHIP CONTEXT: ${ctx.relationship}` : '',
     '',
-    'APPROVED FACTS (the only claims you may make):',
+    'APPROVED FACTS (the ONLY claims you may make — pick at most ONE, or none; never several):',
     ...ctx.approvedFacts.map((f) => `- ${f}`),
     '',
     ctx.bookingLink
