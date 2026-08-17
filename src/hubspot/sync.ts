@@ -18,6 +18,7 @@ import { log } from '../logger.js';
 import { recordEvent } from '../db/events.js';
 import { setSyncState } from '../db/index.js';
 import { allLeads, saveLead, getLeadByEmail, upsertLead } from '../db/leads.js';
+import { applySignal } from '../scoring.js';
 import { HubSpotClient } from './client.js';
 import {
   leadToContactProperties,
@@ -86,6 +87,17 @@ export async function syncHubSpot(client = new HubSpotClient()): Promise<SyncSum
         trigger: 'hubspot-sync',
         reason: `Hydrated from HubSpot contact ${remote.id}`,
       });
+      // Score is a pure function of the LOCAL event log — a hydrated lead has
+      // state but no history, so recompute would silently zero it. Seed the
+      // remote score as an idempotent signal so warmth survives hydration.
+      if ((patch.score ?? 0) > 0) {
+        applySignal(lead.id, 'warm_start', {
+          trigger: 'hubspot-hydration',
+          points: patch.score!,
+          idempotencyKey: 'seed:hydrated',
+          reason: `Hydrated score ${patch.score} from HubSpot`,
+        });
+      }
     }
     if (pulled > 0) slog.info('hydrated leads from HubSpot', { pulled });
   } catch (err) {

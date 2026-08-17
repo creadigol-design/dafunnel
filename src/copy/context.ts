@@ -36,9 +36,21 @@ function extractRelationship(lead: Lead): string | null {
   const notes = lead.internalNotes ?? '';
   const stage = notes.match(/Original stage:\s*([^·]+)/i)?.[1]?.trim();
   const last = notes.match(/Last contact:\s*([0-9-]+)/i)?.[1]?.trim();
+
+  // Be explicit about relationship DEPTH so the generator can never mistake a
+  // one-way reach-out for a conversation that actually happened.
+  const s = (stage ?? '').toLowerCase();
   const parts: string[] = [];
-  if (last) parts.push(`we last spoke around ${last}`);
-  if (stage) parts.push(`the conversation was at the "${stage}" stage`);
+  if (s.includes('initial') || s.includes('reach')) {
+    parts.push(
+      'we contacted them once but NO conversation took place — open as a re-introduction, do not imply we spoke',
+    );
+  } else if (s.includes('discovery') || s.includes('negotiat') || s.includes('proposal')) {
+    parts.push(`a real conversation happened — it reached the "${stage}" stage`);
+  } else if (stage) {
+    parts.push(`the record shows stage "${stage}" — only claim contact, not a conversation, unless the stage implies one`);
+  }
+  if (last) parts.push(`last contact on record: ${last}`);
   return parts.length ? parts.join('; ') : null;
 }
 

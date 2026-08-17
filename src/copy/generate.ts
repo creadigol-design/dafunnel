@@ -34,6 +34,7 @@ const SYSTEM = `You write outreach emails for vedrí, an independent virtual pro
 - NEVER name specific gear, camera bodies, tracking systems, LED processors, or software products. Talk about what the shoot gives them ("real-time composited image on the monitors"), never the kit. This is a hard rule.
 - Under 150 words in the body. Exactly one question mark, at most. End with one specific, low-friction ask — never "let me know if you're interested".
 - Only state facts from the APPROVED FACTS provided. If you need a fact you do not have (a price, a date, a named piece of their work), write a token like {{NEEDS_INPUT: what you need}} instead of inventing it.
+- NEVER invent relationship history. Only reference a past call, chat or meeting if the RELATIONSHIP CONTEXT explicitly includes one (e.g. a "Discovery" or "Negotiating" stage). If the context says the relationship was only an initial reach-out — or there is no relationship context — open as a re-introduction ("we got in touch a while back about…"), not a reunion ("good to reconnect", "since we last spoke"). Claiming a conversation that never happened destroys trust instantly.
 
 Return ONLY JSON: {"subjects": ["variant 1", "variant 2"], "body": "the email body"}. No preamble.`;
 
