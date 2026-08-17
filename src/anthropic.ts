@@ -44,12 +44,16 @@ export interface WebSearchCompleteOptions {
   maxTokens?: number;
   /** Cap on server-side web searches per request (cost control). */
   maxSearches?: number;
+  /** Hard wall-clock deadline. Never hang silently — fail loudly instead. */
+  timeoutMs?: number;
 }
 
 /**
  * Single-turn completion with the server-side web search tool enabled. The
  * search loop runs entirely on Anthropic's side — the response we get back is
  * the final text, with search/result blocks interleaved (we keep text only).
+ * Progress (each search starting) is logged so a long run visibly moves, and
+ * a hard deadline aborts a stalled stream instead of hanging forever.
  */
 export async function completeWithWebSearch(opts: WebSearchCompleteOptions): Promise<string> {
   // Streamed: a server-side search loop can run for many minutes, and a
@@ -69,7 +73,33 @@ export async function completeWithWebSearch(opts: WebSearchCompleteOptions): Pro
       } as unknown as Anthropic.Messages.ToolUnion,
     ],
   });
-  const msg = await stream.finalMessage();
+
+  let searches = 0;
+  stream.on('streamEvent', (event) => {
+    const e = event as { type: string; content_block?: { type?: string } };
+    if (e.type === 'content_block_start' && e.content_block?.type === 'server_tool_use') {
+      searches++;
+      log.info('web search in progress', { search: searches, cap: opts.maxSearches ?? 12 });
+    }
+  });
+
+  const timeoutMs = opts.timeoutMs ?? 480_000; // 8 minutes
+  const deadline = setTimeout(() => {
+    log.warn('web-search completion hit the hard deadline — aborting', { timeoutMs, searchesSoFar: searches });
+    stream.abort();
+  }, timeoutMs);
+
+  let msg: Anthropic.Message;
+  try {
+    msg = await stream.finalMessage();
+  } catch (err) {
+    if (stream.aborted) {
+      throw new Error(`Web-search completion aborted after ${Math.round(timeoutMs / 1000)}s (${searches} searches done). The run can simply be retried.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(deadline);
+  }
   if (msg.stop_reason === 'max_tokens') {
     // The search loop ate the budget before the final answer — the caller will
     // see a truncated (likely unparseable) response. Raise maxTokens or lower
