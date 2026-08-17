@@ -22,6 +22,7 @@ import { runSequences } from './sequences/engine.js';
 import { pollReplies } from './replies/poll.js';
 import { runGovernor } from './governor.js';
 import { runProspector } from './prospecting/discover.js';
+import { enrichCandidates } from './prospecting/enrich.js';
 import { deliverAlerts, maybeSendDailyDigest } from './alerts/deliver.js';
 import { generateDashboard } from './dashboard.js';
 
@@ -116,11 +117,18 @@ const STEPS: Step[] = [
     name: 'prospect',
     run: async () => {
       const s = await runProspector();
+      // Sweep up contact lookups that failed or arrived between discovery runs
+      // (Instagram intake, timeouts). No-op when nothing is pending; bounded
+      // so a backlog cannot stretch the hourly cycle badly.
+      const e = await enrichCandidates(5);
       return {
         name: 'prospect',
         status: s.skippedReason ? 'skipped' : 'ok',
-        ...(s.ran ? { counts: { found: s.found, queued: s.queued, duplicates: s.duplicates } } : {}),
-        note: s.skippedReason ?? (s.ran ? undefined : 'not due (runs weekly)'),
+        counts: {
+          ...(s.ran ? { found: s.found, queued: s.queued, duplicates: s.duplicates } : {}),
+          ...(e.looked ? { contactsLooked: e.looked, contactsFound: e.withEmail } : {}),
+        },
+        note: s.skippedReason ?? (s.ran ? undefined : 'discovery not due (weekly)'),
       };
     },
   },
