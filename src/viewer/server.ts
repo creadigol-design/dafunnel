@@ -16,8 +16,12 @@ import { readFileSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { config } from '../../config/index.js';
 import { log } from '../logger.js';
 import { db } from '../db/index.js';
+import { recordEvent } from '../db/events.js';
 import { eventsForLead } from '../db/events.js';
 import { getLeadByEmail } from '../db/leads.js';
+import { renderMessage } from '../copy/render.js';
+import { lintBody } from '../copy/lint.js';
+import { saveDraftToMailbox, sendMail } from '../mail/client.js';
 
 const vlog = log.child('viewer');
 const PORT = Number(process.env.VIEWER_PORT ?? '8080');
@@ -68,6 +72,17 @@ input[type=text]{flex:1;background:var(--card2);border:1px solid var(--line);bor
 button{background:var(--green);color:#111118;border:0;border-radius:8px;padding:8px 16px;font:700 14px 'Space Grotesk',Arial;cursor:pointer}
 button:hover{background:var(--lime)}
 .ok{color:var(--lime);margin-bottom:14px}
+.err{color:var(--yellow);margin-bottom:14px}
+.actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:flex-start}
+.actions form.inline{margin:0}
+.actions form.grow{flex:1;min-width:260px;margin:0}
+button.secondary{background:var(--card2);color:var(--ink2);border:1px solid var(--line)}
+button.secondary:hover{background:#33342f;color:var(--ink)}
+.btnlink{display:inline-block;padding:8px 16px;border-radius:8px;font:700 14px 'Space Grotesk',Arial;text-decoration:none;background:var(--card2);color:var(--ink2);border:1px solid var(--line)}
+.btnlink:hover{background:#33342f;color:var(--ink)}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.field input[type=text],.field textarea{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:10px 12px;font:inherit;line-height:1.5}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 td{padding:7px 10px 7px 0;border-top:1px solid var(--line);color:var(--ink2);vertical-align:top}
 .muted{color:var(--muted)}
@@ -100,20 +115,48 @@ interface DraftRow {
   company: string | null;
   temperature: string | null;
   score: number | null;
+  suppressed: number | null;
 }
 
 function draftsRows(): DraftRow[] {
   return db()
     .prepare(
       `SELECT dr.id, dr.subject, dr.body, dr.status, dr.lint_status, dr.sequence_id, dr.step, dr.created_at,
-              l.email, l.company, l.temperature, l.score
+              l.email, l.company, l.temperature, l.score, l.suppressed
        FROM drafts dr LEFT JOIN leads l ON l.id = dr.lead_id
        ORDER BY dr.created_at DESC LIMIT 100`,
     )
     .all() as DraftRow[];
 }
 
-function serveDrafts(res: ServerResponse, flashed: boolean): void {
+function draftActions(d: DraftRow): string {
+  if (d.status === 'sent') {
+    return `<div class="meta" style="margin-top:12px"><span class="chip hot">✓ sent ${esc(d.created_at.slice(0, 10))}</span></div>`;
+  }
+  if (d.status === 'approved') {
+    return `<div class="meta" style="margin-top:12px"><span class="chip hot">✓ approved — in your mailbox Drafts, press Send there</span></div>`;
+  }
+  if (d.status === 'lint_failed') {
+    return `<div class="actions"><a class="btnlink secondary" href="/draft?id=${esc(d.id)}">Open & fix</a></div>`;
+  }
+  if (d.status !== 'pending' || d.suppressed) return '';
+  const approveLabel = config.approve.action === 'send' ? 'Approve & send' : 'Approve → my Drafts folder';
+  return `
+      <div class="actions">
+        <form method="POST" action="/approve" class="inline">
+          <input type="hidden" name="id" value="${esc(d.id)}">
+          <button type="submit">${approveLabel}</button>
+        </form>
+        <a class="btnlink secondary" href="/draft?id=${esc(d.id)}">Edit</a>
+        <form method="POST" action="/flag" class="grow">
+          <input type="hidden" name="id" value="${esc(d.id)}">
+          <input type="text" name="note" placeholder="What's wrong with this one? (tone, claim, wrong person…)" required>
+          <button type="submit" class="secondary">Flag it</button>
+        </form>
+      </div>`;
+}
+
+function serveDrafts(res: ServerResponse, flash: { flagged?: boolean; approved?: boolean; sent?: boolean; error?: string }): void {
   const rows = draftsRows();
   const cards = rows
     .map((d) => {
@@ -129,23 +172,184 @@ function serveDrafts(res: ServerResponse, flashed: boolean): void {
       </div>
       <div class="subject">${esc(d.subject)}</div>
       <pre>${esc(d.body)}</pre>
-      <form method="POST" action="/flag">
-        <input type="hidden" name="id" value="${esc(d.id)}">
-        <input type="text" name="note" placeholder="What's wrong with this one? (tone, claim, wrong person…)" required>
-        <button type="submit">Flag it</button>
-      </form>
+      ${draftActions(d)}
     </div>`;
     })
     .join('');
+  const pending = rows.filter((r) => r.status === 'pending').length;
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(
     page(
       'vedrí — drafts',
-      `<h1>Drafts (${rows.length})</h1>
-       ${flashed ? '<div class="ok">✓ Flag recorded — it will be reviewed and the engine tuned.</div>' : ''}
+      `<h1>Drafts <span class="muted">· ${pending} awaiting review</span></h1>
+       ${flash.flagged ? '<div class="ok">✓ Flag recorded — it will be reviewed and the engine tuned.</div>' : ''}
+       ${flash.approved ? '<div class="ok">✓ Approved — the email is now in your info@vedri.studio Drafts folder. Open your mail and press Send when ready.</div>' : ''}
+       ${flash.sent ? '<div class="ok">✓ Sent. The email has left info@vedri.studio — replies will be picked up by the engine automatically.</div>' : ''}
+       ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}
        ${cards || '<div class="card">No drafts yet.</div>'}`,
     ),
   );
+}
+
+/**
+ * Approve — Daniel's click IS the send decision. With APPROVE_ACTION=send
+ * (his chosen default) the email goes out via SMTP immediately; with 'stage'
+ * it is placed in the mailbox Drafts folder for a second manual send. Either
+ * way this only ever happens on an explicit authenticated human click — the
+ * automated cycle can never reach this code. Suppression is re-checked here.
+ */
+function handleApprove(req: IncomingMessage, res: ServerResponse): void {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    void (async () => {
+      const id = new URLSearchParams(raw).get('id') ?? '';
+      const d = db()
+        .prepare(
+          `SELECT dr.id, dr.subject, dr.body, dr.status, dr.lint_status, l.id AS lead_id, l.email, l.suppressed
+           FROM drafts dr LEFT JOIN leads l ON l.id = dr.lead_id WHERE dr.id = ?`,
+        )
+        .get(id) as
+        | { id: string; subject: string; body: string; status: string; lint_status: string | null; lead_id: string | null; email: string | null; suppressed: number | null }
+        | undefined;
+
+      const fail = (msg: string) => {
+        res.writeHead(303, { Location: `/drafts?error=${encodeURIComponent(msg)}` });
+        res.end();
+      };
+
+      if (!d) return fail('Draft not found.');
+      if (d.status !== 'pending') return fail('Only pending drafts can be approved.');
+      if (!d.email || !d.lead_id) return fail('Draft has no recipient.');
+      if (d.suppressed || db().prepare('SELECT 1 FROM suppression WHERE email = ?').get(d.email.toLowerCase())) {
+        return fail('Recipient is suppressed — cannot approve.');
+      }
+
+      const rendered = renderMessage(d.subject, d.body);
+      const sendMode = config.approve.action === 'send';
+      try {
+        if (sendMode) {
+          await sendMail(d.email, d.subject, rendered.full);
+        } else {
+          await saveDraftToMailbox(d.email, d.subject, rendered.full);
+        }
+      } catch (err) {
+        const m = err instanceof Error ? err.message : String(err);
+        vlog.error('approve failed at mail step', { id, sendMode, error: m });
+        return fail(`Could not ${sendMode ? 'send' : 'stage'} (${m}) — nothing was changed, try again.`);
+      }
+
+      const now = new Date().toISOString();
+      db().prepare('UPDATE drafts SET status = ?, updated_at = ? WHERE id = ?').run(sendMode ? 'sent' : 'approved', now, id);
+      recordEvent({
+        leadId: d.lead_id,
+        type: sendMode ? 'email.sent' : 'draft.approved',
+        trigger: 'viewer',
+        reason: sendMode
+          ? `Approved and SENT by Daniel via the viewer (${d.subject})`
+          : `Approved by Daniel — staged to mailbox Drafts (${d.subject})`,
+      });
+      vlog.info(sendMode ? 'draft approved and sent' : 'draft approved (staged)', { id, to: d.email });
+      res.writeHead(303, { Location: `/drafts?${sendMode ? 'sent' : 'approved'}=1` });
+      res.end();
+    })();
+  });
+}
+
+/** Draft detail — read, amend (subject + body), approve or flag in one place. */
+function serveDraftDetail(res: ServerResponse, id: string, flash: { saved?: boolean; error?: string }): void {
+  const d = db()
+    .prepare(
+      `SELECT dr.*, l.email AS lead_email, l.company, l.temperature, l.score
+       FROM drafts dr LEFT JOIN leads l ON l.id = dr.lead_id WHERE dr.id = ?`,
+    )
+    .get(id) as (DraftRow & { lead_email: string | null }) | undefined;
+  if (!d) {
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(page('vedrí — draft', '<div class="card">Draft not found.</div>'));
+    return;
+  }
+  const editable = d.status === 'pending' || d.status === 'lint_failed';
+  const bandClass = d.temperature === 'Hot' ? 'hot' : d.temperature === 'Warm' ? 'warm' : '';
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(
+    page(
+      'vedrí — draft',
+      `<h1>Draft <span class="muted">· ${esc(d.sequence_id)} step ${d.step + 1}</span></h1>
+      ${flash.saved ? '<div class="ok">✓ Changes saved and re-checked.</div>' : ''}
+      ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}
+      <div class="card">
+        <div class="meta">
+          <span class="chip">${esc(d.lead_email ?? '?')}</span>
+          ${d.company ? `<span class="chip">${esc(d.company)}</span>` : ''}
+          <span class="chip ${bandClass}">${esc(d.temperature ?? '?')} ${d.score ?? ''}</span>
+          ${d.status === 'lint_failed' ? `<span class="chip flagged">${esc(d.lint_status ?? 'flagged')}</span>` : `<span class="chip">${esc(d.status)}</span>`}
+        </div>
+        ${
+          editable
+            ? `<form method="POST" action="/edit">
+                <input type="hidden" name="id" value="${esc(d.id)}">
+                <div class="field"><label>Subject</label>
+                <input type="text" name="subject" value="${esc(d.subject)}" required></div>
+                <div class="field"><label>Body <span class="muted">(the signature + unsubscribe footer is added automatically)</span></label>
+                <textarea name="body" rows="14" required>${esc(d.body)}</textarea></div>
+                <div class="actions"><button type="submit" class="secondary">Save changes</button></div>
+              </form>
+              ${d.status === 'pending' ? `<div class="actions"><form method="POST" action="/approve" class="inline"><input type="hidden" name="id" value="${esc(d.id)}"><button type="submit">${config.approve.action === 'send' ? 'Approve & send' : 'Approve → my Drafts folder'}</button></form></div>` : '<div class="meta" style="margin-top:10px"><span class="muted">Fix the issues and save — it becomes approvable once clean.</span></div>'}`
+            : `<div class="subject">${esc(d.subject)}</div><pre>${esc(d.body)}</pre>`
+        }
+      </div>
+      <p><a href="/drafts" style="color:var(--ink2)">← back to drafts</a></p>`,
+    ),
+  );
+}
+
+/**
+ * Save an amendment. The kit-leak rule still hard-blocks (it protects the
+ * business even from hand-written copy); other lint rules downgrade to a
+ * warning chip — the human's words are the human's call. A lint_failed draft
+ * that comes back clean returns to pending and becomes approvable.
+ */
+function handleEdit(req: IncomingMessage, res: ServerResponse): void {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    const params = new URLSearchParams(raw);
+    const id = params.get('id') ?? '';
+    const subject = (params.get('subject') ?? '').slice(0, 300).trim();
+    const body = (params.get('body') ?? '').slice(0, 10_000).trim();
+    const back = (q: string) => {
+      res.writeHead(303, { Location: `/draft?id=${encodeURIComponent(id)}&${q}` });
+      res.end();
+    };
+
+    const d = db().prepare('SELECT id, status, lead_id FROM drafts WHERE id = ?').get(id) as
+      | { id: string; status: string; lead_id: string | null }
+      | undefined;
+    if (!d) return back('error=Draft%20not%20found');
+    if (d.status !== 'pending' && d.status !== 'lint_failed') return back('error=This%20draft%20can%20no%20longer%20be%20edited');
+    if (!subject || !body) return back('error=Subject%20and%20body%20are%20required');
+
+    const lint = lintBody(subject, body);
+    const kitLeak = lint.failures.filter((f) => f.includes('kit'));
+    if (kitLeak.length) {
+      return back(`error=${encodeURIComponent(`Blocked — internal kit terms must never reach a client: ${kitLeak.join('; ')}`)}`);
+    }
+
+    const now = new Date().toISOString();
+    const lintStatus = lint.pass ? 'pass' : `warn (your call): ${lint.failures.join('; ')}`;
+    db()
+      .prepare("UPDATE drafts SET subject = ?, body = ?, status = 'pending', lint_status = ?, updated_at = ? WHERE id = ?")
+      .run(subject, body, lintStatus, now, id);
+    recordEvent({
+      leadId: d.lead_id,
+      type: 'draft.edited',
+      trigger: 'viewer',
+      reason: `Amended by Daniel in the viewer (${subject})${lint.pass ? '' : ' — style warnings accepted'}`,
+    });
+    vlog.info('draft edited', { id, lintPass: lint.pass });
+    back('saved=1');
+  });
 }
 
 function serveLead(res: ServerResponse, email: string): void {
@@ -206,8 +410,21 @@ const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
   try {
     if (req.method === 'POST' && url.pathname === '/flag') return handleFlag(req, res);
+    if (req.method === 'POST' && url.pathname === '/approve') return handleApprove(req, res);
+    if (req.method === 'POST' && url.pathname === '/edit') return handleEdit(req, res);
     if (url.pathname === '/' || url.pathname === '/dashboard') return serveDashboard(res);
-    if (url.pathname === '/drafts') return serveDrafts(res, url.searchParams.has('flagged'));
+    if (url.pathname === '/draft')
+      return serveDraftDetail(res, url.searchParams.get('id') ?? '', {
+        saved: url.searchParams.has('saved'),
+        error: url.searchParams.get('error') ?? undefined,
+      });
+    if (url.pathname === '/drafts')
+      return serveDrafts(res, {
+        flagged: url.searchParams.has('flagged'),
+        approved: url.searchParams.has('approved'),
+        sent: url.searchParams.has('sent'),
+        error: url.searchParams.get('error') ?? undefined,
+      });
     if (url.pathname === '/lead') return serveLead(res, url.searchParams.get('email') ?? '');
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not found');

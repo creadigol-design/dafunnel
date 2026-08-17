@@ -57,6 +57,15 @@ export interface Config {
   booking: { link: string };
 
   /**
+   * What the viewer's Approve button does. 'send' (Daniel's chosen default):
+   * the click IS the send decision — the email goes out via SMTP immediately.
+   * 'stage': the email is placed in the mailbox Drafts folder for a second
+   * manual send. Automated paths are unaffected either way — only an explicit
+   * human click can trigger this.
+   */
+  approve: { action: 'send' | 'stage' };
+
+  /**
    * Sequence activation for staged go-live (Phase 10): only these sequence ids
    * generate drafts. Defaults to reactivation only — the warmest, lowest-risk
    * audience. Add inbound, then cold, as the domain warms.
@@ -141,6 +150,7 @@ export const config: Config = Object.freeze({
     unsubscribeMailto: str('UNSUBSCRIBE_MAILTO', 'info@vedri.studio'),
   },
   booking: { link: str('BOOKING_LINK') },
+  approve: { action: (str('APPROVE_ACTION', 'send') === 'stage' ? 'stage' : 'send') as 'send' | 'stage' },
   sequences: {
     active: str('SEQUENCES_ACTIVE', 'A3-reactivation,B3-reactivation')
       .split(',')
