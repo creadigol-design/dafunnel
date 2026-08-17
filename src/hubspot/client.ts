@@ -112,6 +112,27 @@ export class HubSpotClient {
   }
 
   // ── Contacts ──────────────────────────────────────────────────────────────
+  /** List all contacts (paginated). Used to hydrate the local mirror from HubSpot. */
+  async listAllContacts(properties: string[]): Promise<HubSpotContact[]> {
+    const out: HubSpotContact[] = [];
+    let after: string | undefined;
+    for (let page = 0; page < 50; page++) {
+      const r = await this.request<{
+        results: HubSpotContact[];
+        paging?: { next?: { after?: string } };
+      }>('POST', '/crm/v3/objects/contacts/search', {
+        filterGroups: [],
+        properties,
+        limit: 200,
+        ...(after ? { after } : {}),
+      });
+      out.push(...r.results);
+      after = r.paging?.next?.after;
+      if (!after) break;
+    }
+    return out;
+  }
+
   async searchContactByEmail(email: string, properties: string[]): Promise<HubSpotContact | null> {
     const r = await this.request<{ results: HubSpotContact[] }>('POST', '/crm/v3/objects/contacts/search', {
       filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: email }] }],

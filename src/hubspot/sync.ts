@@ -17,9 +17,14 @@ import type { Lead } from '../types.js';
 import { log } from '../logger.js';
 import { recordEvent } from '../db/events.js';
 import { setSyncState } from '../db/index.js';
-import { allLeads, saveLead } from '../db/leads.js';
+import { allLeads, saveLead, getLeadByEmail, upsertLead } from '../db/leads.js';
 import { HubSpotClient } from './client.js';
-import { leadToContactProperties, HUMAN_OWNED_FIELDS, MACHINE_OWNED_FIELDS } from './mapping.js';
+import {
+  leadToContactProperties,
+  contactToLeadPatch,
+  HUMAN_OWNED_FIELDS,
+  MACHINE_OWNED_FIELDS,
+} from './mapping.js';
 import { reconcile } from './reconcile.js';
 
 const slog = log.child('sync');
@@ -59,6 +64,34 @@ export async function syncHubSpot(client = new HubSpotClient()): Promise<SyncSum
     slog.warn('HubSpot token not set — sync skipped (Phase 2 setup pending)');
     summary.skipped = true;
     return summary;
+  }
+
+  // Hydrate DOWN first: HubSpot is the system of record, so contacts that exist
+  // remotely but not in the local mirror (fresh VPS, or added by Daniel in the
+  // HubSpot UI) are pulled in. A pull is a read + local write — allowed in
+  // DRY_RUN, which only gates writes to the outside world.
+  try {
+    const remoteAll = await client.listAllContacts(READ_PROPERTIES);
+    let pulled = 0;
+    for (const remote of remoteAll) {
+      const email = remote.properties.email?.toLowerCase();
+      if (!email) continue;
+      if (getLeadByEmail(email)) continue;
+      const patch = contactToLeadPatch(remote.properties);
+      const lead = upsertLead({ ...patch, email, hubspotContactId: remote.id });
+      pulled++;
+      recordEvent({
+        leadId: lead.id,
+        type: 'sync.pulled_from_hubspot',
+        trigger: 'hubspot-sync',
+        reason: `Hydrated from HubSpot contact ${remote.id}`,
+      });
+    }
+    if (pulled > 0) slog.info('hydrated leads from HubSpot', { pulled });
+  } catch (err) {
+    slog.error('hydration pull failed — continuing with local mirror', {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   const leads = allLeads();
