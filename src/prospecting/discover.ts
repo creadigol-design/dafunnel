@@ -114,20 +114,36 @@ For each candidate return:
 Return the JSON array only.`;
 }
 
+/**
+ * Find the JSON array in a model response. Web-search responses interleave
+ * prose and citation markers like [1], so "first [ to last ]" is not enough —
+ * try every candidate span that starts at a plausible array-of-objects opener.
+ */
+function extractArray(text: string): unknown[] | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const source = fenced ? fenced[1]! : text;
+  const starts: number[] = [];
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '[' && /^\[\s*\{/.test(source.slice(i, i + 8))) starts.push(i);
+  }
+  if (source.trimStart().startsWith('[')) starts.unshift(source.indexOf('['));
+  for (const start of starts) {
+    for (let end = source.lastIndexOf(']'); end > start; end = source.lastIndexOf(']', end - 1)) {
+      try {
+        const parsed: unknown = JSON.parse(source.slice(start, end + 1));
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // keep walking earlier closing brackets
+      }
+    }
+  }
+  return null;
+}
+
 /** Parse + validate the model's output. Exported for tests. */
 export function parseCandidates(text: string): ProspectCandidate[] {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1]! : text;
-  const start = candidate.indexOf('[');
-  const end = candidate.lastIndexOf(']');
-  if (start === -1 || end === -1 || end < start) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(candidate.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+  const parsed = extractArray(text);
+  if (!parsed) return [];
 
   const out: ProspectCandidate[] = [];
   for (const raw of parsed as Record<string, unknown>[]) {
@@ -195,6 +211,10 @@ export async function runProspector(asOf: Date = new Date(), force = false): Pro
   });
 
   const candidates = parseCandidates(text);
+  if (candidates.length === 0) {
+    // Keep the evidence in the log — "found 0" with no trace is undebuggable.
+    plog.warn('no candidates parsed from the response', { chars: text.length, preview: text.slice(0, 400) });
+  }
   const summary: ProspectorSummary = { ran: true, found: candidates.length, queued: 0, duplicates: 0, dropped: 0 };
 
   const conn = db();

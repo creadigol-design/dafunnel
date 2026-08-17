@@ -87,6 +87,16 @@ describe('parseCandidates — the honesty gate', () => {
     expect(out[0]!.track).toBe('Both');
   });
 
+  it('finds the array even when prose carries citation markers like [1]', () => {
+    const text =
+      'Based on my searches [1][2], strong fits near Manchester [3]:\n' +
+      JSON.stringify([good]) +
+      '\nSources: [1] example.com [2] example.org';
+    const out = parseCandidates(text);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.company).toBe('Alpha Films');
+  });
+
   it('returns empty on junk', () => {
     expect(parseCandidates('no json here')).toEqual([]);
     expect(parseCandidates('{"an":"object, not an array"}')).toEqual([]);
