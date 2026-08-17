@@ -32,7 +32,7 @@ Type=simple
 WorkingDirectory=$APP_DIR
 Environment=PATH=$NODE_BIN:/usr/bin:/bin
 Environment=COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-ExecStart=$NODE_BIN/node $APP_DIR/node_modules/.bin/tsx src/viewer/server.ts
+ExecStart=$NODE_BIN/node $APP_DIR/node_modules/tsx/dist/cli.mjs src/viewer/server.ts
 Restart=always
 RestartSec=5
 
