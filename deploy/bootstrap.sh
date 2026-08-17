@@ -17,6 +17,18 @@ echo ""
 echo "── vedrí funnel bootstrap ─────────────────────────────────────────"
 echo "   directory: $APP_DIR"
 
+# Self-update so a re-run always uses the latest fixes, then re-exec the fresh
+# copy of this script (editing a running bash script in place is unsafe).
+if [ -z "${VEDRI_BOOTSTRAP_UPDATED:-}" ]; then
+  BEFORE="$(git rev-parse HEAD 2>/dev/null || echo none)"
+  git pull --ff-only 2>/dev/null || true
+  AFTER="$(git rev-parse HEAD 2>/dev/null || echo none)"
+  if [ "$BEFORE" != "$AFTER" ]; then
+    echo "── updated to $(git rev-parse --short HEAD) — restarting bootstrap…"
+    VEDRI_BOOTSTRAP_UPDATED=1 exec bash "$APP_DIR/deploy/bootstrap.sh"
+  fi
+fi
+
 # ── 1. OS prerequisites ─────────────────────────────────────────────────────
 if command -v dnf >/dev/null; then
   echo "── installing prerequisites (dnf)…"
