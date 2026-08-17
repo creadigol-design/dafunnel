@@ -206,8 +206,10 @@ export async function runProspector(asOf: Date = new Date(), force = false): Pro
   const text = await completeWithWebSearch({
     system: SYSTEM,
     user: userPrompt(avoid),
-    maxSearches: 15,
-    maxTokens: 8192,
+    // Budget balance learned live: 15 searches under 8192 tokens ran out of
+    // room before the final array. Fewer searches, much more headroom.
+    maxSearches: 10,
+    maxTokens: 16384,
   });
 
   const candidates = parseCandidates(text);

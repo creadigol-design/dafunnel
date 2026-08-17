@@ -5,6 +5,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { config, requireSecret } from '../config/index.js';
+import { log } from './logger.js';
 
 let client: Anthropic | null = null;
 
@@ -69,6 +70,15 @@ export async function completeWithWebSearch(opts: WebSearchCompleteOptions): Pro
     ],
   });
   const msg = await stream.finalMessage();
+  if (msg.stop_reason === 'max_tokens') {
+    // The search loop ate the budget before the final answer — the caller will
+    // see a truncated (likely unparseable) response. Raise maxTokens or lower
+    // maxSearches if this recurs.
+    log.warn('web-search completion truncated at max_tokens', {
+      maxTokens: opts.maxTokens ?? 8192,
+      maxSearches: opts.maxSearches ?? 12,
+    });
+  }
   return msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
     .map((b) => b.text)
