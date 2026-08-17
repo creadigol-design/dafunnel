@@ -148,7 +148,7 @@ export async function enrichCandidates(limit = 15): Promise<EnrichSummary> {
           user: `Instagram account: @${handle} (profile: ${p.evidence_url}). They engaged with a UK virtual production studio's Instagram. Work out who they are, and find the best person and published contact details to pitch video production / VFX services to. Return the JSON only.`,
           maxSearches: 5,
           maxTokens: 4096,
-          timeoutMs: 180_000,
+          timeoutMs: 300_000, // successful lookups take ~2.5 min live; 180s aborted half of them
         });
         ig = parseIgResearch(text);
         contact = ig;
@@ -162,7 +162,7 @@ Find the best person there to pitch ${service} to, and their published contact d
           user,
           maxSearches: 4,
           maxTokens: 4096,
-          timeoutMs: 180_000,
+          timeoutMs: 300_000, // successful lookups take ~2.5 min live; 180s aborted half of them
         });
         contact = parseContact(text);
       }
