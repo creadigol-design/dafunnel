@@ -1,0 +1,35 @@
+# A4 — Outreach intro (Track A / Studio). Prospector-approved leads only:
+# companies Daniel picked by hand from the /prospects review queue.
+# First contact with a stranger — an honest introduction, never a reunion,
+# never a brochure. Personal-note register throughout. Sent from the warm
+# mailbox because volume is tiny and every send is a human click.
+id: A4-outreach
+track: Studio
+sources: [Built List]
+fromMailbox: warm
+cold: true # PECR: individuals/freemail (needsConsent) are excluded by the engine
+steps:
+  - dayOffset: 0
+    purpose: Introduce ourselves honestly and open a conversation, not a pitch.
+    guidance: >
+      We have NEVER spoken — open as a first introduction ("came across your
+      work", which is true: we found them researching studios whose work fits
+      ours), never imply prior contact. One line on who we are, at most ONE
+      approved fact and only if it fits naturally, then a genuine question
+      about what they are making at the moment. Short and warm. A reply beats
+      a booking link on a first note.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 6
+    purpose: One useful thought, not a chase.
+    guidance: >
+      Never "just following up". Offer ONE specific observation relevant to
+      the kind of shoots they do — something they might actually be weighing
+      up. Do not repeat step 1. Soft ask, no pressure.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 14
+    purpose: Polite close with the door left open.
+    guidance: >
+      Two or three sentences. We will stop nudging; if studio capacity within
+      reach of them is ever useful, one reply is all it takes. No facts, no
+      selling, no guilt.
+    exitConditions: [reply, booked, unsubscribed]

@@ -491,7 +491,7 @@ function serveProspects(
       'vedrí — prospects',
       `<h1>Prospects <span class="muted">· ${candidates} awaiting review</span></h1>
        <p class="muted" style="margin-bottom:16px">Found weekly by the prospector with live web search. Check the evidence link — approving creates a lead for your Built List; binning a company means it is never suggested again. Nobody here is contacted until you approve them AND their sequence goes live.</p>
-       ${flash.approved ? '<div class="ok">✓ Approved — created as a Built List lead. It enters sequencing only when a matching sequence is switched on.</div>' : ''}
+       ${flash.approved ? '<div class="ok">✓ Approved — created as a Built List lead. An intro note will be drafted for them on the next hourly cycle; review it under drafts as usual.</div>' : ''}
        ${flash.discarded ? '<div class="ok">✓ Binned — this company will not be suggested again.</div>' : ''}
        ${flash.added ? `<div class="ok">✓ Queued ${esc(flash.added)} Instagram account(s)${flash.dup && flash.dup !== '0' ? ` (${esc(flash.dup)} already known)` : ''} — research starts now and fills in who they are within a few minutes. Refresh to see it land.</div>` : ''}
        ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}

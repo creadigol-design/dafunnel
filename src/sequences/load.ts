@@ -19,9 +19,30 @@ export function loadSequences(): Sequence[] {
   return cache;
 }
 
-/** Pick the sequence for a lead by track + source. Returns null if none matches. */
-export function selectSequence(lead: Lead, sequences = loadSequences()): Sequence | null {
+/**
+ * Pick the sequence for a lead by track + source. Returns null if none matches.
+ *
+ * When `activeIds` is given, active sequences win over inactive ones for a
+ * contested source (Built List is claimed by both the bulk cold program and
+ * the prospector-approved intro). Among those, a lead Daniel approved by hand
+ * in the prospects queue always takes the personal warm-mailbox intro
+ * (A4/B4), never the bulk cold program — that register would be wrong for a
+ * hand-picked contact.
+ */
+export function selectSequence(
+  lead: Lead,
+  sequences = loadSequences(),
+  activeIds?: Set<string>,
+): Sequence | null {
   const track = lead.track === 'VFX' ? 'VFX' : 'Studio'; // "Both" → Studio default
-  const matches = sequences.filter((s) => s.track === track && s.sources.includes(lead.source));
+  let matches = sequences.filter((s) => s.track === track && s.sources.includes(lead.source));
+  if (activeIds) {
+    const active = matches.filter((s) => activeIds.has(s.id));
+    if (active.length) matches = active;
+  }
+  if (matches.length > 1 && lead.internalNotes?.startsWith('Prospector:')) {
+    const intro = matches.find((s) => s.id.includes('outreach'));
+    if (intro) return intro;
+  }
   return matches[0] ?? null;
 }

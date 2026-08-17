@@ -13,6 +13,19 @@ describe('selectSequence', () => {
   it('routes a Studio built-list lead to cold', () => {
     expect(selectSequence(makeLead({ track: 'Studio', source: 'Built List' }))?.id).toBe('A2-cold');
   });
+  it('prospector-approved leads take the personal intro over the bulk cold program', () => {
+    const lead = makeLead({
+      track: 'Studio',
+      source: 'Built List',
+      internalNotes: 'Prospector: fits the ICP · evidence: https://example.com',
+    });
+    expect(selectSequence(lead)?.id).toBe('A4-outreach');
+  });
+  it('active sequences win a contested source', () => {
+    const lead = makeLead({ track: 'Studio', source: 'Built List' });
+    expect(selectSequence(lead, undefined, new Set(['A4-outreach']))?.id).toBe('A4-outreach');
+    expect(selectSequence(lead, undefined, new Set(['A2-cold']))?.id).toBe('A2-cold');
+  });
   it('routes an inbound Studio lead to the inbound sequence', () => {
     expect(selectSequence(makeLead({ track: 'Studio', source: 'Decision Matrix' }))?.id).toBe('A1-inbound');
   });

@@ -1,0 +1,30 @@
+# B4 — Outreach intro (Track B / VFX). Prospector-approved leads only.
+# Same rules as A4: honest first contact, personal-note register, tiny volume,
+# human-approved sends from the warm mailbox.
+id: B4-outreach
+track: VFX
+sources: [Built List]
+fromMailbox: warm
+cold: true # PECR: individuals/freemail (needsConsent) are excluded by the engine
+steps:
+  - dayOffset: 0
+    purpose: Introduce ourselves honestly and open a conversation, not a pitch.
+    guidance: >
+      We have NEVER spoken — open as a first introduction ("came across your
+      work"), never imply prior contact. One line on who we are, at most ONE
+      approved fact if it fits naturally, then a genuine question about what
+      they are cutting or finishing at the moment. Short and warm.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 6
+    purpose: One useful thought about their post work, not a chase.
+    guidance: >
+      Never "just following up". ONE specific observation about finishing work
+      they plausibly face (comp, cleanup, green-screen finishing). Do not
+      repeat step 1. Soft ask.
+    exitConditions: [reply, booked, unsubscribed]
+  - dayOffset: 14
+    purpose: Polite close with the door left open.
+    guidance: >
+      Two or three sentences. We will stop nudging; if finishing capacity is
+      ever useful, one reply is all it takes. No facts, no selling.
+    exitConditions: [reply, booked, unsubscribed]

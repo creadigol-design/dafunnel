@@ -44,7 +44,7 @@ export async function runSequences(
     if (summary.processed >= limit) break;
     if (lead.suppressed || isTerminal(lead.temperature)) continue;
 
-    const seq = selectSequence(lead);
+    const seq = selectSequence(lead, undefined, active);
     if (!seq || !active.has(seq.id)) continue;
     if (seq.cold && lead.needsConsent) continue; // cold needs consent — skip
     if (isSuppressed(lead.email)) continue;

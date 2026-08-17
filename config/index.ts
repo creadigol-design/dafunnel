@@ -159,7 +159,10 @@ export const config: Config = Object.freeze({
   booking: { link: str('BOOKING_LINK') },
   approve: { action: (str('APPROVE_ACTION', 'send') === 'stage' ? 'stage' : 'send') as 'send' | 'stage' },
   sequences: {
-    active: str('SEQUENCES_ACTIVE', 'A3-reactivation,B3-reactivation')
+    // Reactivation (known contacts) + outreach intros (prospector-approved
+    // leads — every one hand-picked by Daniel). Bulk cold (A2/B2) stays off
+    // until the cold sending domain exists.
+    active: str('SEQUENCES_ACTIVE', 'A3-reactivation,B3-reactivation,A4-outreach,B4-outreach')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
