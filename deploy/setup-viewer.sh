@@ -43,6 +43,19 @@ systemctl daemon-reload
 systemctl enable --now vedri-viewer
 systemctl restart vedri-viewer
 
+# ── SELinux: allow systemd to exec node from /root/.nvm ────────────────────
+# On enforcing RHEL-family systems, services may not execute binaries labelled
+# user_home_t. Label the nvm tree bin_t so the unit can spawn node.
+if command -v getenforce >/dev/null && [ "$(getenforce)" = "Enforcing" ]; then
+  command -v semanage >/dev/null || dnf install -y -q policycoreutils-python-utils || true
+  if command -v semanage >/dev/null; then
+    semanage fcontext -a -t bin_t '/root/.nvm(/.*)?' 2>/dev/null || true
+    restorecon -R /root/.nvm 2>/dev/null || true
+    systemctl restart vedri-viewer
+    echo "selinux: /root/.nvm labelled bin_t (service can exec node)"
+  fi
+fi
+
 # ── firewall ────────────────────────────────────────────────────────────────
 if command -v firewall-cmd >/dev/null && systemctl is-active --quiet firewalld; then
   firewall-cmd --permanent --add-port=8080/tcp >/dev/null
