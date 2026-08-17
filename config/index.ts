@@ -50,6 +50,9 @@ export interface Config {
   };
   anthropic: { apiKey: string; model: string };
 
+  /** Mailchimp Marketing API — website signups (consent basis). Key only. */
+  mailchimp: { apiKey: string; listId: string };
+
   /** Sender identity + postal address + unsubscribe — required in every email (UK PECR). */
   sender: { name: string; postalAddress: string; unsubscribeMailto: string };
 
@@ -142,6 +145,10 @@ export const config: Config = Object.freeze({
   anthropic: {
     apiKey: str('ANTHROPIC_API_KEY'),
     model: str('CLAUDE_MODEL', 'claude-sonnet-5'),
+  },
+  mailchimp: {
+    apiKey: str('MAILCHIMP_API_KEY'),
+    listId: str('MAILCHIMP_LIST_ID'),
   },
   sender: {
     name: str('SENDER_NAME', 'Daniel Evans, vedrí'),

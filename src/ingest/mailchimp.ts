@@ -8,6 +8,7 @@
  * member→RawLead mapping and `ingestMailchimpMembers` are testable now and are
  * what the live pull will feed.
  */
+import { config } from '../../config/index.js';
 import { log } from '../logger.js';
 import { recordEvent } from '../db/events.js';
 import { upsertLead } from '../db/leads.js';
@@ -67,10 +68,69 @@ export function ingestMailchimpMembers(members: MailchimpMember[]): ImportReport
   return report;
 }
 
-/** Live pull — gated on the Mailchimp connector being authorised. */
+/** The datacentre lives in the key's suffix (…-us21). Exported for tests. */
+export function dcFromKey(apiKey: string): string | null {
+  const dc = apiKey.split('-').pop() ?? '';
+  return /^[a-z]{2,4}\d{1,3}$/.test(dc) ? dc : null;
+}
+
+async function mcGet(dc: string, apiKey: string, path: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`https://${dc}.api.mailchimp.com/3.0${path}`, {
+    headers: { Authorization: `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}` },
+  });
+  if (!res.ok) throw new Error(`Mailchimp ${res.status} on ${path}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+/**
+ * Live pull via the Mailchimp Marketing API. Needs only MAILCHIMP_API_KEY in
+ * .env (MAILCHIMP_LIST_ID optionally narrows to one audience; otherwise every
+ * audience is pulled). Idempotent: members upsert by email, so re-pulling the
+ * whole list each cycle is safe and unsubscribes are respected on every pass.
+ */
 export async function pullMailchimp(): Promise<ImportReport | null> {
-  // The Mailchimp MCP connector is not authorised in headless runs; the
-  // deployed pull will use the Mailchimp Marketing API with an API key.
-  mlog.warn('Mailchimp not authorised — pull skipped (authorise the connector to enable)');
-  return null;
+  const apiKey = config.mailchimp.apiKey;
+  if (!apiKey) {
+    mlog.warn('MAILCHIMP_API_KEY not set — website-signup pull skipped');
+    return null;
+  }
+  const dc = dcFromKey(apiKey);
+  if (!dc) {
+    mlog.error('MAILCHIMP_API_KEY looks malformed — expected a key ending in a datacentre like -us21');
+    return null;
+  }
+
+  try {
+    let listIds: string[];
+    if (config.mailchimp.listId) {
+      listIds = [config.mailchimp.listId];
+    } else {
+      const lists = await mcGet(dc, apiKey, '/lists?count=100&fields=lists.id,lists.name');
+      listIds = ((lists.lists as { id: string }[] | undefined) ?? []).map((l) => l.id);
+    }
+
+    const members: MailchimpMember[] = [];
+    for (const listId of listIds) {
+      // Small-studio audiences: page through everything; upserts are idempotent.
+      for (let offset = 0; ; offset += 500) {
+        const page = await mcGet(
+          dc,
+          apiKey,
+          `/lists/${listId}/members?count=500&offset=${offset}&fields=members.email_address,members.status,members.merge_fields,members.timestamp_opt,total_items`,
+        );
+        const batch = (page.members as MailchimpMember[] | undefined) ?? [];
+        members.push(...batch);
+        if (batch.length < 500) break;
+      }
+    }
+
+    const report = ingestMailchimpMembers(members);
+    mlog.info('mailchimp pull complete', { lists: listIds.length, members: members.length, imported: report.imported });
+    return report;
+  } catch (err) {
+    mlog.error('mailchimp pull failed — will retry next cycle', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }

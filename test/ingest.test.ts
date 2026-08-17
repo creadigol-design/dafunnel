@@ -210,3 +210,24 @@ describe('reactivation classification', () => {
     );
   });
 });
+
+describe('mailchimp mapping', () => {
+  it('extracts the datacentre from the API key suffix', async () => {
+    const { dcFromKey } = await import('../src/ingest/mailchimp.js');
+    expect(dcFromKey('abc123def456-us21')).toBe('us21');
+    expect(dcFromKey('no-suffix-here')).toBeNull();
+    expect(dcFromKey('plainkey')).toBeNull();
+  });
+  it('maps a member to a consented RawLead', async () => {
+    const { memberToRawLead } = await import('../src/ingest/mailchimp.js');
+    const raw = memberToRawLead({
+      email_address: 'jo@prodco.co.uk',
+      status: 'subscribed',
+      merge_fields: { FNAME: 'Jo', LNAME: 'Hughes', COMPANY: 'Prodco' },
+      timestamp_opt: '2026-05-01T10:00:00+00:00',
+    });
+    expect(raw.source).toBe('Mailchimp Signup');
+    expect(raw.firstName).toBe('Jo');
+    expect(raw.lastEngagementAt).toBe('2026-05-01T10:00:00+00:00');
+  });
+});
