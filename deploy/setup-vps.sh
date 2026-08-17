@@ -50,11 +50,18 @@ if [ ! -f .env ]; then
 fi
 
 # ── 4. Cron ─────────────────────────────────────────────────────────────────
+# Robust under errexit/pipefail on a machine with NO existing crontab: every
+# step tolerates emptiness instead of treating "no crontab yet" as failure.
 NODE_BIN="$(dirname "$(command -v node)")"
-CYCLE_LINE="10 * * * * cd $APP_DIR && PATH=$NODE_BIN:\$PATH pnpm run cycle >> output/logs/cron.log 2>&1"
-DOCTOR_LINE="0 7 * * * cd $APP_DIR && PATH=$NODE_BIN:\$PATH pnpm run doctor >> output/logs/doctor.log 2>&1"
+ENVPREFIX="COREPACK_ENABLE_DOWNLOAD_PROMPT=0 PATH=$NODE_BIN:\$PATH"
+CYCLE_LINE="10 * * * * cd $APP_DIR && $ENVPREFIX pnpm run cycle >> output/logs/cron.log 2>&1"
+DOCTOR_LINE="0 7 * * * cd $APP_DIR && $ENVPREFIX pnpm run doctor >> output/logs/doctor.log 2>&1"
 mkdir -p output/logs
-( crontab -l 2>/dev/null | grep -v 'pnpm run cycle' | grep -v 'pnpm run doctor'; echo "$CYCLE_LINE"; echo "$DOCTOR_LINE" ) | crontab -
+TMP_CRON="$(mktemp)"
+{ crontab -l 2>/dev/null || true; } | { grep -v 'pnpm run cycle' || true; } | { grep -v 'pnpm run doctor' || true; } > "$TMP_CRON"
+printf '%s\n%s\n' "$CYCLE_LINE" "$DOCTOR_LINE" >> "$TMP_CRON"
+crontab "$TMP_CRON"
+rm -f "$TMP_CRON"
 echo "cron installed: cycle hourly at :10, doctor daily at 07:00"
 
 # ── 5. Prove it ─────────────────────────────────────────────────────────────
