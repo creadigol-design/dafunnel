@@ -78,3 +78,30 @@ describe('lintDraft — combined gate', () => {
     expect(lintDraft({ subject: 'Hello', body: GOOD_BODY, rendered: 'no footer' }).pass).toBe(false);
   });
 });
+
+describe('buildRewritePrompt — Daniel-steered rewrites', () => {
+  it('carries the instruction, current draft and approved facts', async () => {
+    const { buildRewritePrompt } = await import('../src/copy/generate.js');
+    const prompt = buildRewritePrompt(
+      {
+        firstName: 'Chris',
+        company: 'Media Borne',
+        track: 'Studio',
+        recommendedApproach: null,
+        relationship: 'a real conversation happened — it reached the "Negotiating" stage',
+        research: null,
+        approvedFacts: ['We do real-time compositing in-house.'],
+        bookingLink: null,
+      },
+      {
+        instruction: 'Mention their new Cardiff studio and keep it to three sentences.',
+        currentSubject: 'Quick one, Chris',
+        currentBody: 'Hi Chris, old body here.',
+      },
+    );
+    expect(prompt).toContain("DANIEL'S INSTRUCTION: Mention their new Cardiff studio");
+    expect(prompt).toContain('CURRENT DRAFT SUBJECT: Quick one, Chris');
+    expect(prompt).toContain('counts as an approved fact');
+    expect(prompt).toContain('Negotiating');
+  });
+});

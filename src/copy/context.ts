@@ -15,6 +15,12 @@ export interface CopyContext {
   recommendedApproach: Lead['recommendedApproach'];
   /** Safe reactivation context, e.g. "we last spoke ~March; you were mid-quote". */
   relationship: string | null;
+  /**
+   * Public-web research about them from the prospector (what they make, why
+   * they fit). Client-safe by construction — it was found on public pages.
+   * Lets an intro email reference their actual work instead of pleasantries.
+   */
+  research: string | null;
   /** The ONLY facts the model may state. Client-safe positioning, no gear names. */
   approvedFacts: string[];
   /** Booking link for the call-to-action, if configured. */
@@ -54,6 +60,19 @@ function extractRelationship(lead: Lead): string | null {
   return parts.length ? parts.join('; ') : null;
 }
 
+/**
+ * Only the prospector's research crosses the internal-notes firewall — it came
+ * from public pages, so it cannot leak anything. Everything else in
+ * internalNotes (kit lists, quiz answers) stays out of the generator.
+ */
+function extractResearch(lead: Lead): string | null {
+  const notes = lead.internalNotes ?? '';
+  if (!notes.startsWith('Prospector:')) return null;
+  const body = notes.slice('Prospector:'.length);
+  const research = (body.split('· evidence:')[0] ?? '').trim();
+  return research || null;
+}
+
 export function buildContext(lead: Lead): CopyContext {
   return {
     firstName: lead.firstName ?? 'there',
@@ -61,6 +80,7 @@ export function buildContext(lead: Lead): CopyContext {
     track: lead.track,
     recommendedApproach: lead.recommendedApproach,
     relationship: extractRelationship(lead),
+    research: extractResearch(lead),
     approvedFacts: APPROVED_TALKING_POINTS,
     bookingLink: config.booking.link || null,
   };

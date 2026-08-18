@@ -18,7 +18,8 @@ import { log } from '../logger.js';
 import { db } from '../db/index.js';
 import { recordEvent } from '../db/events.js';
 import { eventsForLead } from '../db/events.js';
-import { getLeadByEmail, upsertLead } from '../db/leads.js';
+import { getLeadByEmail, getLeadById, upsertLead } from '../db/leads.js';
+import { rewriteDraft } from '../copy/generate.js';
 import { isFreemail } from '../ingest/normalise.js';
 import { enrichCandidates } from '../prospecting/enrich.js';
 import { generateDm, igHandle, type DmProspect } from '../prospecting/dm.js';
@@ -262,7 +263,11 @@ function handleApprove(req: IncomingMessage, res: ServerResponse): void {
 }
 
 /** Draft detail — read, amend (subject + body), approve or flag in one place. */
-function serveDraftDetail(res: ServerResponse, id: string, flash: { saved?: boolean; error?: string }): void {
+function serveDraftDetail(
+  res: ServerResponse,
+  id: string,
+  flash: { saved?: boolean; rewritten?: boolean; flagged?: boolean; error?: string },
+): void {
   const d = db()
     .prepare(
       `SELECT dr.*, l.email AS lead_email, l.company, l.temperature, l.score
@@ -282,6 +287,8 @@ function serveDraftDetail(res: ServerResponse, id: string, flash: { saved?: bool
       'vedrí — draft',
       `<h1>Draft <span class="muted">· ${esc(d.sequence_id)} step ${d.step + 1}</span></h1>
       ${flash.saved ? '<div class="ok">✓ Changes saved and re-checked.</div>' : ''}
+      ${flash.rewritten ? '<div class="ok">✓ Rewritten around your steer — read it over, tweak if needed, approve when happy.</div>' : ''}
+      ${flash.flagged ? '<div class="err">The rewrite tripped the style check — its reasons are on the chip above. Edit by hand or steer again.</div>' : ''}
       ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}
       <div class="card">
         <div class="meta">
@@ -300,7 +307,16 @@ function serveDraftDetail(res: ServerResponse, id: string, flash: { saved?: bool
                 <textarea name="body" rows="14" required>${esc(d.body)}</textarea></div>
                 <div class="actions"><button type="submit" class="secondary">Save changes</button></div>
               </form>
-              ${d.status === 'pending' ? `<div class="actions"><form method="POST" action="/approve" class="inline"><input type="hidden" name="id" value="${esc(d.id)}"><button type="submit">${config.approve.action === 'send' ? 'Approve & send' : 'Approve → my Drafts folder'}</button></form></div>` : '<div class="meta" style="margin-top:10px"><span class="muted">Fix the issues and save — it becomes approvable once clean.</span></div>'}`
+              ${d.status === 'pending' ? `<div class="actions"><form method="POST" action="/approve" class="inline"><input type="hidden" name="id" value="${esc(d.id)}"><button type="submit">${config.approve.action === 'send' ? 'Approve & send' : 'Approve → my Drafts folder'}</button></form></div>` : '<div class="meta" style="margin-top:10px"><span class="muted">Fix the issues and save — it becomes approvable once clean.</span></div>'}
+              <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px">
+                <div class="subject">Tell it what to say</div>
+                <div class="muted" style="margin-bottom:8px">Describe what this email should say — what you know about them, an angle to take, something to mention or drop. It gets rewritten in the studio voice around your steer.</div>
+                <form method="POST" action="/rewrite">
+                  <input type="hidden" name="id" value="${esc(d.id)}">
+                  <div class="field"><textarea name="instruction" rows="3" required placeholder="e.g. They've just opened a new studio in Cardiff — congratulate them, and ask if they shoot interviews there. Mention we spoke at BSC."></textarea></div>
+                  <div class="actions"><button type="submit">Rewrite it for me</button></div>
+                </form>
+              </div>`
             : `<div class="subject">${esc(d.subject)}</div><pre>${esc(d.body)}</pre>`
         }
       </div>
@@ -354,6 +370,60 @@ function handleEdit(req: IncomingMessage, res: ServerResponse): void {
     });
     vlog.info('draft edited', { id, lintPass: lint.pass });
     back('saved=1');
+  });
+}
+
+/**
+ * Daniel-steered rewrite: he says what the email should say, the generator
+ * rewrites around it. His instruction is trusted as fact (he knows the
+ * relationship); the machine gate (kit terms, fluff, footer) still applies to
+ * the output, so even a steered rewrite cannot leak the kit list.
+ */
+function handleRewrite(req: IncomingMessage, res: ServerResponse): void {
+  readBody(req, async (params) => {
+    const id = params.get('id') ?? '';
+    const instruction = (params.get('instruction') ?? '').slice(0, 1500).trim();
+    const back = (q: string) => {
+      res.writeHead(303, { Location: `/draft?id=${encodeURIComponent(id)}&${q}` });
+      res.end();
+    };
+
+    const d = db()
+      .prepare('SELECT id, subject, body, status, lead_id FROM drafts WHERE id = ?')
+      .get(id) as { id: string; subject: string; body: string; status: string; lead_id: string | null } | undefined;
+    if (!d) return back('error=Draft%20not%20found');
+    if (d.status !== 'pending' && d.status !== 'lint_failed') return back('error=This%20draft%20can%20no%20longer%20be%20changed');
+    if (!instruction) return back('error=Tell%20it%20what%20to%20say%20first');
+    const lead = d.lead_id ? getLeadById(d.lead_id) : null;
+    if (!lead) return back('error=Draft%20has%20no%20lead');
+
+    try {
+      const gen = await rewriteDraft(lead, { instruction, currentSubject: d.subject, currentBody: d.body });
+      const now = new Date().toISOString();
+      const status = gen.lint.pass ? 'pending' : 'lint_failed';
+      db()
+        .prepare('UPDATE drafts SET subject = ?, body = ?, status = ?, lint_status = ?, updated_at = ? WHERE id = ?')
+        .run(gen.subjects[0] ?? d.subject, gen.body, status, gen.lint.pass ? 'pass' : `fail: ${gen.lint.failures.join('; ')}`, now, id);
+      recordEvent({
+        leadId: lead.id,
+        type: 'draft.rewritten',
+        trigger: 'viewer',
+        reason: `Rewritten to Daniel's steer: "${instruction.slice(0, 140)}"`,
+        data: { draftId: id, lintPass: gen.lint.pass },
+      });
+      // The steer is a tuning signal — keep it with the flag feedback.
+      mkdirSync('data', { recursive: true });
+      appendFileSync(
+        'data/feedback.log',
+        JSON.stringify({ at: now, draftId: id, kind: 'steer', instruction }) + '\n',
+      );
+      vlog.info('draft rewritten to steer', { id, lintPass: gen.lint.pass });
+      back(gen.lint.pass ? 'rewritten=1' : 'flagged=1');
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      vlog.error('steered rewrite failed', { id, error: m });
+      back(`error=${encodeURIComponent(`Could not rewrite (${m}) — the draft is unchanged, try again.`)}`);
+    }
   });
 }
 
@@ -787,6 +857,7 @@ const server = createServer((req, res) => {
     if (req.method === 'POST' && url.pathname === '/flag') return handleFlag(req, res);
     if (req.method === 'POST' && url.pathname === '/approve') return handleApprove(req, res);
     if (req.method === 'POST' && url.pathname === '/edit') return handleEdit(req, res);
+    if (req.method === 'POST' && url.pathname === '/rewrite') return handleRewrite(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-approve') return handleProspectApprove(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-discard') return handleProspectDiscard(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-instagram') return handleProspectInstagram(req, res);
@@ -805,6 +876,8 @@ const server = createServer((req, res) => {
     if (url.pathname === '/draft')
       return serveDraftDetail(res, url.searchParams.get('id') ?? '', {
         saved: url.searchParams.has('saved'),
+        rewritten: url.searchParams.has('rewritten'),
+        flagged: url.searchParams.has('flagged'),
         error: url.searchParams.get('error') ?? undefined,
       });
     if (url.pathname === '/drafts')
