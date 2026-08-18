@@ -101,7 +101,29 @@ function gather(asOf: Date) {
     )
     .all(week) as LeadRow[];
 
-  return { bands, byBand, projection, rec, funnel, drafts, touches, dataPoints: dataPoints.c };
+  // Recent replies: classifications AND low-confidence escalations, newest
+  // first — the escalated ones are exactly the ones Daniel must not miss.
+  const replies = d
+    .prepare(
+      `SELECT e.type, e.reason, e.created_at, e.data, l.email, l.company, l.first_name, l.last_name
+       FROM events e LEFT JOIN leads l ON l.id = e.lead_id
+       WHERE e.type IN ('reply.classified', 'reply.escalated')
+       ORDER BY e.created_at DESC LIMIT 10`,
+    )
+    .all() as ReplyRow[];
+
+  return { bands, byBand, projection, rec, funnel, drafts, touches, replies, dataPoints: dataPoints.c };
+}
+
+interface ReplyRow {
+  type: string;
+  reason: string;
+  created_at: string;
+  data: string | null;
+  email: string | null;
+  company: string | null;
+  first_name: string | null;
+  last_name: string | null;
 }
 
 // ── rendering ───────────────────────────────────────────────────────────────
@@ -278,6 +300,25 @@ footer{margin-top:26px;color:var(--muted);font-size:12px}
               )
               .join('')}</table>`
           : '<div class="empty">nothing waiting — inbox zero</div>'
+      }
+    </div>
+
+    <div class="card span12">
+      <h2>Recent replies</h2>
+      ${
+        g.replies.length
+          ? `<table><tr><th>When</th><th>Who</th><th>What they said</th><th></th></tr>${g.replies
+              .map((r) => {
+                const cls = r.data ? ((JSON.parse(r.data) as { class?: string }).class ?? '') : '';
+                const escalated = r.type === 'reply.escalated';
+                const who = [r.first_name, r.last_name].filter(Boolean).join(' ') || r.email || 'unknown sender';
+                return `<tr><td class="k">${fmtWhen(r.created_at)}</td>
+                <td>${r.email ? `<a class="rowlink" href="/lead?email=${encodeURIComponent(r.email)}">${esc(who)}</a>` : esc(who)}${r.company ? ` <span class="chip">${esc(r.company)}</span>` : ''}</td>
+                <td>${esc(r.reason)}</td>
+                <td>${escalated ? '<span class="chip flag">needs you</span>' : `<span class="chip">${esc(cls.toLowerCase().replaceAll('_', ' '))}</span>`}</td></tr>`;
+              })
+              .join('')}</table>`
+          : '<div class="empty">no replies yet — they land here (and on Slack) as they arrive</div>'
       }
     </div>
 

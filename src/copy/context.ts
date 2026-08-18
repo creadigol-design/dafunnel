@@ -25,7 +25,22 @@ export interface CopyContext {
   approvedFacts: string[];
   /** Booking link for the call-to-action, if configured. */
   bookingLink: string | null;
+  /** Showreel + case study for proof — at most one per email, where it fits. */
+  proof: typeof PROOF_LINKS | null;
 }
+
+/**
+ * Proof assets — safe to share anywhere. The generator may include AT MOST one
+ * per email, and only where seeing the work answers the reader's natural next
+ * question.
+ */
+export const PROOF_LINKS = {
+  reel: 'https://youtu.be/44s-v0W9qSY',
+  caseStudy: {
+    url: 'https://vedri.studio/case-studies/aber-falls-distillery/',
+    label: 'a recent shoot for Aber Falls Distillery, just up the coast from us',
+  },
+} as const;
 
 /** Client-safe positioning points (no product/brand names — see the lint list). */
 export const APPROVED_TALKING_POINTS: string[] = [
@@ -81,6 +96,7 @@ export function buildContext(lead: Lead): CopyContext {
     recommendedApproach: lead.recommendedApproach,
     relationship: extractRelationship(lead),
     research: extractResearch(lead),
+    proof: PROOF_LINKS,
     approvedFacts: APPROVED_TALKING_POINTS,
     bookingLink: config.booking.link || null,
   };

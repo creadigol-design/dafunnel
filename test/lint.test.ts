@@ -90,6 +90,7 @@ describe('buildRewritePrompt — Daniel-steered rewrites', () => {
         recommendedApproach: null,
         relationship: 'a real conversation happened — it reached the "Negotiating" stage',
         research: null,
+        proof: null,
         approvedFacts: ['We do real-time compositing in-house.'],
         bookingLink: null,
       },
