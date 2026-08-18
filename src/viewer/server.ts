@@ -130,6 +130,7 @@ function draftsRows(): DraftRow[] {
       `SELECT dr.id, dr.subject, dr.body, dr.status, dr.lint_status, dr.sequence_id, dr.step, dr.created_at,
               l.email, l.company, l.temperature, l.score, l.suppressed
        FROM drafts dr LEFT JOIN leads l ON l.id = dr.lead_id
+       WHERE dr.status != 'discarded'
        ORDER BY dr.created_at DESC LIMIT 100`,
     )
     .all() as DraftRow[];
@@ -142,8 +143,13 @@ function draftActions(d: DraftRow): string {
   if (d.status === 'approved') {
     return `<div class="meta" style="margin-top:12px"><span class="chip hot">✓ approved — in your mailbox Drafts, press Send there</span></div>`;
   }
+  const binForm = `<form method="POST" action="/discard" class="inline"
+          onsubmit="return confirm('Bin this draft and stop all automated follow-ups for this person? They stay a lead — you can always email them by hand.')">
+          <input type="hidden" name="id" value="${esc(d.id)}">
+          <button type="submit" class="secondary">Bin — no follow-up</button>
+        </form>`;
   if (d.status === 'lint_failed') {
-    return `<div class="actions"><a class="btnlink secondary" href="/draft?id=${esc(d.id)}">Open & fix</a></div>`;
+    return `<div class="actions"><a class="btnlink secondary" href="/draft?id=${esc(d.id)}">Open & fix</a>${binForm}</div>`;
   }
   if (d.status !== 'pending' || d.suppressed) return '';
   const approveLabel = config.approve.action === 'send' ? 'Approve & send' : 'Approve → my Drafts folder';
@@ -154,6 +160,7 @@ function draftActions(d: DraftRow): string {
           <button type="submit">${approveLabel}</button>
         </form>
         <a class="btnlink secondary" href="/draft?id=${esc(d.id)}">Edit</a>
+        ${binForm}
         <form method="POST" action="/flag" class="grow">
           <input type="hidden" name="id" value="${esc(d.id)}">
           <input type="text" name="note" placeholder="What's wrong with this one? (tone, claim, wrong person…)" required>
@@ -162,7 +169,10 @@ function draftActions(d: DraftRow): string {
       </div>`;
 }
 
-function serveDrafts(res: ServerResponse, flash: { flagged?: boolean; approved?: boolean; sent?: boolean; error?: string }): void {
+function serveDrafts(
+  res: ServerResponse,
+  flash: { flagged?: boolean; approved?: boolean; sent?: boolean; binned?: boolean; error?: string },
+): void {
   const rows = draftsRows();
   const cards = rows
     .map((d) => {
@@ -189,6 +199,7 @@ function serveDrafts(res: ServerResponse, flash: { flagged?: boolean; approved?:
       'vedrí — drafts',
       `<h1>Drafts <span class="muted">· ${pending} awaiting review</span></h1>
        ${flash.flagged ? '<div class="ok">✓ Flag recorded — it will be reviewed and the engine tuned.</div>' : ''}
+       ${flash.binned ? '<div class="ok">✓ Binned — no more automated follow-ups for them. They stay a lead (replies still tracked), and you can email them by hand any time.</div>' : ''}
        ${flash.approved ? '<div class="ok">✓ Approved — the email is now in your info@vedri.studio Drafts folder. Open your mail and press Send when ready.</div>' : ''}
        ${flash.sent ? '<div class="ok">✓ Sent. The email has left info@vedri.studio — replies will be picked up by the engine automatically.</div>' : ''}
        ${flash.error ? `<div class="err">✗ ${esc(flash.error)}</div>` : ''}
@@ -453,6 +464,42 @@ function serveLead(res: ServerResponse, email: string): void {
        <div class="card"><table>${rows || '<tr><td>No events.</td></tr>'}</table></div>`,
     ),
   );
+}
+
+/**
+ * Bin a draft AND stop the sequence for its lead. Deleting only the draft
+ * would be a trap — the engine would write the next step later. Halting is a
+ * step index past any sequence's end, so no future cycle ever drafts for them
+ * again. The lead itself stays: still scored, replies still handled, hand
+ * emails always possible. This is deliberately NOT suppression — that is for
+ * "never contact", this is "no automated follow-ups".
+ */
+function handleDiscardDraft(req: IncomingMessage, res: ServerResponse): void {
+  readBody(req, (params) => {
+    const id = params.get('id') ?? '';
+    const d = db()
+      .prepare("SELECT id, lead_id, subject FROM drafts WHERE id = ? AND status IN ('pending','lint_failed')")
+      .get(id) as { id: string; lead_id: string | null; subject: string } | undefined;
+    if (d) {
+      const now = new Date().toISOString();
+      db().prepare("UPDATE drafts SET status = 'discarded', updated_at = ? WHERE id = ?").run(now, d.id);
+      if (d.lead_id) {
+        db()
+          .prepare('UPDATE leads SET sequence_step = 9999, next_touch_at = NULL, updated_at = ? WHERE id = ?')
+          .run(now, d.lead_id);
+      }
+      recordEvent({
+        leadId: d.lead_id,
+        type: 'sequence.stopped',
+        trigger: 'viewer',
+        reason: `Daniel binned the draft ("${d.subject}") — no automated follow-ups for this lead.`,
+        data: { draftId: d.id },
+      });
+      vlog.info('draft binned, sequence stopped', { id: d.id, leadId: d.lead_id });
+    }
+    res.writeHead(303, { Location: '/drafts?binned=1' });
+    res.end();
+  });
 }
 
 function handleFlag(req: IncomingMessage, res: ServerResponse): void {
@@ -855,6 +902,7 @@ const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
   try {
     if (req.method === 'POST' && url.pathname === '/flag') return handleFlag(req, res);
+    if (req.method === 'POST' && url.pathname === '/discard') return handleDiscardDraft(req, res);
     if (req.method === 'POST' && url.pathname === '/approve') return handleApprove(req, res);
     if (req.method === 'POST' && url.pathname === '/edit') return handleEdit(req, res);
     if (req.method === 'POST' && url.pathname === '/rewrite') return handleRewrite(req, res);
@@ -885,6 +933,7 @@ const server = createServer((req, res) => {
         flagged: url.searchParams.has('flagged'),
         approved: url.searchParams.has('approved'),
         sent: url.searchParams.has('sent'),
+        binned: url.searchParams.has('binned'),
         error: url.searchParams.get('error') ?? undefined,
       });
     if (url.pathname === '/lead') return serveLead(res, url.searchParams.get('email') ?? '');
