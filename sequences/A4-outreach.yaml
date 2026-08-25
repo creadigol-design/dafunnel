@@ -23,8 +23,11 @@ steps:
     purpose: One useful thought, not a chase.
     guidance: >
       Never "just following up". Offer ONE specific observation relevant to
-      the kind of shoots they do — something they might actually be weighing
-      up. Do not repeat step 1. Soft ask, no pressure.
+      the kind of shoots they do. For a PRODUCTION COMPANY the strongest
+      second angle is usually our VFX arm — they keep shooting their own
+      work and hand us the compositing/cleanup/finishing they'd rather not
+      carry; we're a helping hand, not a competitor. Do not repeat step 1.
+      Soft ask, no pressure.
     exitConditions: [reply, booked, unsubscribed]
   - dayOffset: 14
     purpose: Polite close with the door left open.

@@ -59,7 +59,7 @@ function userPrompt(ctx: CopyContext, step: StepSpec): string {
       ? `CALL-TO-ACTION: if the ask is to talk, point them to the booking link ${ctx.bookingLink} (e.g. "grab a slot that suits: <link>"). Otherwise ask for a short reply.`
       : 'CALL-TO-ACTION: ask for a short reply or a quick call.',
     ctx.proof
-      ? `PROOF LINKS (optional — include AT MOST ONE, and only when seeing the work answers the reader's natural next question, e.g. a first introduction; a personal reactivation note usually needs neither): showreel ${ctx.proof.reel} ("here's a feel of how we work"), or ${ctx.proof.caseStudy.label}: ${ctx.proof.caseStudy.url}. Write links bare, woven into a sentence.`
+      ? `PROOF LINKS (optional — include AT MOST ONE, and only when seeing the work answers the reader's natural next question, e.g. a first introduction; a personal reactivation note usually needs neither): showreel ${ctx.proof.reel} ("here's a feel of how we work"); ${ctx.proof.caseStudy.label}: ${ctx.proof.caseStudy.url}; or, when the email takes the VFX/finishing angle, the VFX arm's site ${ctx.proof.vfxSite}. Write links bare, woven into a sentence.`
       : '',
     '',
     'Write two subject-line variants and one body. Keep the body under 150 words.',
@@ -111,7 +111,7 @@ export function buildRewritePrompt(ctx: CopyContext, spec: RewriteSpec): string 
       ? `CALL-TO-ACTION: if the ask is to talk, the booking link is ${ctx.bookingLink} — but only use it if it fits Daniel's instruction.`
       : '',
     ctx.proof
-      ? `PROOF LINKS (use if his instruction calls for showing work, at most one): showreel ${ctx.proof.reel}; ${ctx.proof.caseStudy.label}: ${ctx.proof.caseStudy.url}.`
+      ? `PROOF LINKS (use if his instruction calls for showing work, at most one): showreel ${ctx.proof.reel}; ${ctx.proof.caseStudy.label}: ${ctx.proof.caseStudy.url}; VFX arm's site ${ctx.proof.vfxSite}.`
       : '',
     '',
     'Write two subject-line variants and one body. Keep the body under 150 words unless his instruction demands otherwise — and even then, shorter is better.',

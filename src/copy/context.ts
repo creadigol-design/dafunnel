@@ -40,6 +40,8 @@ export const PROOF_LINKS = {
     url: 'https://vedri.studio/case-studies/aber-falls-distillery/',
     label: 'a recent shoot for Aber Falls Distillery, just up the coast from us',
   },
+  /** The VFX arm's own site — the right link when the email takes the VFX angle. */
+  vfxSite: 'https://vfx.vedri.studio',
 } as const;
 
 /** Client-safe positioning points (no product/brand names — see the lint list). */
@@ -48,6 +50,7 @@ export const APPROVED_TALKING_POINTS: string[] = [
   'We support multi-camera shoots with no frustum limit, so every angle gets a live composited output.',
   'We hire in an LED volume when a job genuinely needs in-camera VP, rather than carrying the cost when it does not.',
   'We are in North Wales — close enough to Manchester, Liverpool, Birmingham and Cardiff to travel, without London-stage economics.',
+  'Alongside the studio we run a VFX arm — compositing, cleanup and green-screen finishing — so a production company can keep shooting their own work and hand us the post they would rather not carry.',
 ];
 
 function extractRelationship(lead: Lead): string | null {
