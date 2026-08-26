@@ -198,7 +198,7 @@ describe('knownDomains — dedupe set', () => {
 
   it('migrations created the prospects table incl. the enrichment columns', () => {
     const version = db().pragma('user_version', { simple: true });
-    expect(version).toBe(5);
+    expect(version).toBe(6);
     const cols = (db().prepare("SELECT name FROM pragma_table_info('prospects')").all() as { name: string }[]).map(
       (c) => c.name,
     );
@@ -236,5 +236,16 @@ describe('instagram DM assist', () => {
     await sweepDueDms(new Date('2026-08-17T09:00:00.000Z'));
     const row = db().prepare("SELECT ig_dm_status FROM prospects WHERE id = 'dm1'").get() as { ig_dm_status: string };
     expect(row.ig_dm_status).toBe('done');
+  });
+});
+
+describe('normaliseIgHandle', () => {
+  it('accepts @handle, bare handle and profile URLs; rejects junk', async () => {
+    const { normaliseIgHandle } = await import('../src/prospecting/dm.js');
+    expect(normaliseIgHandle('@Some.Studio')).toBe('some.studio');
+    expect(normaliseIgHandle('https://www.instagram.com/somestudio/')).toBe('somestudio');
+    expect(normaliseIgHandle('somestudio')).toBe('somestudio');
+    expect(normaliseIgHandle('not a handle!')).toBeNull();
+    expect(normaliseIgHandle(null)).toBeNull();
   });
 });

@@ -550,12 +550,18 @@ interface ProspectRow {
   ig_dm_status: string;
   ig_dm_sent_at: string | null;
   ig_dm_count: number;
+  ig_handle: string | null;
 }
 
-/** The Instagram DM panel for an instagram-origin prospect card. */
+/** A prospect's known handle: discovered/enriched column, or the intake URL. */
+function handleFor(p: ProspectRow): string | null {
+  return p.ig_handle ?? (p.origin === 'instagram' ? igHandle(p.evidence_url) : null);
+}
+
+/** The Instagram DM panel — any prospect with a published handle gets it. */
 function dmPanel(p: ProspectRow): string {
-  if (p.origin !== 'instagram' || p.status === 'discarded') return '';
-  const handle = igHandle(p.evidence_url);
+  if (p.status === 'discarded') return '';
+  const handle = handleFor(p);
   if (!handle) return '';
   const dmLink = `https://ig.me/m/${esc(handle)}`;
   const writeLabel = p.ig_dm_count >= 1 ? 'Write the follow-up DM' : 'Write a DM';
@@ -593,15 +599,22 @@ function dmPanel(p: ProspectRow): string {
 function serveProspects(
   res: ServerResponse,
   flash: { approved?: boolean; discarded?: boolean; added?: string; dup?: string; error?: string },
+  igOnly = false,
 ): void {
-  const rows = db()
+  let rows = db()
     .prepare(
       `SELECT * FROM prospects
        ORDER BY CASE status WHEN 'candidate' THEN 0 ELSE 1 END, discovered_at DESC
        LIMIT 100`,
     )
     .all() as ProspectRow[];
+  const withHandle = rows.filter((r) => handleFor(r) !== null);
+  if (igOnly) rows = withHandle;
   const candidates = rows.filter((r) => r.status === 'candidate').length;
+  const tabs = `<div class="meta" style="margin-bottom:14px">
+    <a class="chip" style="text-decoration:none;${igOnly ? '' : 'background:var(--green);color:#111118;font-weight:700'}" href="/prospects">All prospects</a>
+    <a class="chip" style="text-decoration:none;${igOnly ? 'background:var(--green);color:#111118;font-weight:700' : ''}" href="/prospects?ig=1">Instagram — ready to DM (${withHandle.filter((r) => r.status !== 'discarded').length})</a>
+  </div>`;
   const cards = rows
     .map((p) => {
       const link = (url: string | null, label: string) =>
@@ -651,7 +664,8 @@ function serveProspects(
     page(
       'vedrí — prospects',
       `<h1>Prospects <span class="muted">· ${candidates} awaiting review</span></h1>
-       <p class="muted" style="margin-bottom:16px">Found weekly by the prospector with live web search. Check the evidence link — approving creates a lead for your Built List; binning a company means it is never suggested again. Nobody here is contacted until you approve them AND their sequence goes live.</p>
+       ${tabs}
+       <p class="muted" style="margin-bottom:16px">Found weekly by the prospector with live web search. Check the evidence link — approving creates a lead for your Built List; binning a company means it is never suggested again. Where a published Instagram handle was found, the card also carries the DM assist — write, copy, send from your own account. Nobody is contacted by the machine, ever.</p>
        ${flash.approved ? '<div class="ok">✓ Approved — created as a Built List lead. An intro note will be drafted for them on the next hourly cycle; review it under drafts as usual.</div>' : ''}
        ${flash.discarded ? '<div class="ok">✓ Binned — this company will not be suggested again.</div>' : ''}
        ${flash.added ? `<div class="ok">✓ Queued ${esc(flash.added)} Instagram account(s)${flash.dup && flash.dup !== '0' ? ` (${esc(flash.dup)} already known)` : ''} — research starts now and fills in who they are within a few minutes. Refresh to see it land.</div>` : ''}
@@ -823,8 +837,8 @@ function handleDmWrite(req: IncomingMessage, res: ServerResponse): void {
     const id = params.get('id') ?? '';
     const p = db()
       .prepare(
-        `SELECT id, company, category, location, why_fit, contact_name, track, ig_dm_count FROM prospects
-         WHERE id = ? AND origin = 'instagram' AND status != 'discarded'`,
+        `SELECT id, company, category, location, why_fit, contact_name, track, origin, ig_dm_count FROM prospects
+         WHERE id = ? AND status != 'discarded' AND (ig_handle IS NOT NULL OR origin = 'instagram')`,
       )
       .get(id) as (DmProspect & { ig_dm_count: number }) | undefined;
     if (!p) {
@@ -913,13 +927,17 @@ const server = createServer((req, res) => {
     if (req.method === 'POST' && url.pathname === '/prospect-dm-sent') return handleDmSent(req, res);
     if (req.method === 'POST' && url.pathname === '/prospect-dm-replied') return handleDmReplied(req, res);
     if (url.pathname === '/prospects')
-      return serveProspects(res, {
-        approved: url.searchParams.has('approved'),
-        discarded: url.searchParams.has('discarded'),
-        added: url.searchParams.get('added') ?? undefined,
-        dup: url.searchParams.get('dup') ?? undefined,
-        error: url.searchParams.get('error') ?? undefined,
-      });
+      return serveProspects(
+        res,
+        {
+          approved: url.searchParams.has('approved'),
+          discarded: url.searchParams.has('discarded'),
+          added: url.searchParams.get('added') ?? undefined,
+          dup: url.searchParams.get('dup') ?? undefined,
+          error: url.searchParams.get('error') ?? undefined,
+        },
+        url.searchParams.has('ig'),
+      );
     if (url.pathname === '/' || url.pathname === '/dashboard') return serveDashboard(res);
     if (url.pathname === '/draft')
       return serveDraftDetail(res, url.searchParams.get('id') ?? '', {

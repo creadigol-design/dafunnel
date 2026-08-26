@@ -14,6 +14,7 @@ import { log } from '../logger.js';
 import { db } from '../db/index.js';
 import { recordEvent } from '../db/events.js';
 import { completeWithWebSearch, extractJson } from '../anthropic.js';
+import { normaliseIgHandle } from './dm.js';
 
 const elog = log.child('enrich');
 
@@ -26,6 +27,8 @@ export interface EnrichedContact {
   contactPageUrl: string | null;
   /** The page where the name/email was actually published. */
   sourceUrl: string | null;
+  /** Published Instagram handle, when found. */
+  igHandle: string | null;
 }
 
 const SYSTEM = `You research who to contact at a specific company, using web search, for a small UK studio's new-business outreach. You are rigorous about evidence.
@@ -35,7 +38,7 @@ Hard rules:
 - Prefer a named decision-maker (founder, managing director, executive producer, head of production) over a generic role inbox (info@/hello@). If only a role inbox is published, report that.
 - "sourceUrl" must be the page where the name/email actually appears.
 
-Return ONLY JSON: {"contactName": "... or null", "contactRole": "... or null", "contactEmail": "... or null", "contactPageUrl": "https://... or null", "sourceUrl": "https://... or null"}. No preamble.`;
+Return ONLY JSON: {"contactName": "... or null", "contactRole": "... or null", "contactEmail": "... or null", "contactPageUrl": "https://... or null", "sourceUrl": "https://... or null", "instagramHandle": "the company's Instagram handle ONLY if you saw it published — never guessed; else null"}. No preamble.`;
 
 /** Validate the model's answer. Exported for tests. */
 export function parseContact(text: string): EnrichedContact {
@@ -43,7 +46,7 @@ export function parseContact(text: string): EnrichedContact {
   try {
     raw = extractJson<Record<string, unknown>>(text);
   } catch {
-    return { contactName: null, contactRole: null, contactEmail: null, contactPageUrl: null, sourceUrl: null };
+    return { contactName: null, contactRole: null, contactEmail: null, contactPageUrl: null, sourceUrl: null, igHandle: null };
   }
   const str = (v: unknown) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim() : null);
   const url = (v: unknown) => {
@@ -61,6 +64,7 @@ export function parseContact(text: string): EnrichedContact {
     contactEmail,
     contactPageUrl: url(raw.contactPageUrl),
     sourceUrl,
+    igHandle: normaliseIgHandle(str(raw.instagramHandle)),
   };
 }
 
@@ -194,12 +198,14 @@ Find the best person there to pitch ${service} to, and their published contact d
              why_fit = COALESCE(?, why_fit),
              contact_name = ?, contact_role = ?, contact_email = ?,
              contact_page_url = ?, contact_source_url = ?,
+             ig_handle = COALESCE(ig_handle, ?),
              enriched_at = ?, updated_at = ?
            WHERE id = ?`,
         )
         .run(
           ig.company, ig.website, domain, ig.location, ig.category, ig.whyFit,
           ig.contactName, ig.contactRole, ig.contactEmail, ig.contactPageUrl, ig.sourceUrl,
+          normaliseIgHandle(p.evidence_url),
           now, now, p.id,
         );
     } else {
@@ -211,10 +217,11 @@ Find the best person there to pitch ${service} to, and their published contact d
              contact_email = ?,
              contact_page_url = COALESCE(?, contact_page_url),
              contact_source_url = ?,
+             ig_handle = COALESCE(ig_handle, ?),
              enriched_at = ?, updated_at = ?
            WHERE id = ?`,
         )
-        .run(contact.contactName, contact.contactRole, contact.contactEmail, contact.contactPageUrl, contact.sourceUrl, now, now, p.id);
+        .run(contact.contactName, contact.contactRole, contact.contactEmail, contact.contactPageUrl, contact.sourceUrl, contact.igHandle, now, now, p.id);
     }
 
     summary.looked++;

@@ -56,9 +56,22 @@ export function igHandle(evidenceUrl: string): string | null {
   return m ? m[1]!.toLowerCase() : null;
 }
 
-const SYSTEM = `You write short Instagram DMs for vedrí (@vedri.studio), an independent virtual production studio in North Wales run by Daniel Evans. The DM goes to an account that engaged with vedrí's Instagram, so a light acknowledgement of that is honest and natural.
+/** Normalise any published handle form (@x, instagram.com/x, x) — or null. */
+export function normaliseIgHandle(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const s = input
+    .trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+    .replace(/^@/, '')
+    .replace(/[/?#].*$/, '')
+    .toLowerCase();
+  return /^[a-z0-9._]{1,30}$/.test(s) ? s : null;
+}
+
+const SYSTEM = `You write short Instagram DMs for vedrí (@vedri.studio), an independent virtual production studio in North Wales run by Daniel Evans.
 
 Rules — all hard:
+- ONLY mention them following/liking/engaging with vedrí if the context explicitly says they did. Claiming engagement that never happened is instantly detectable and fatal — they can see their own history.
 - Under ${DM_MAX_WORDS} words. A DM is a text message, not an email. No greeting-name formality ("Hi there," is fine; no "Dear").
 - Warm, casual, specific. Sounds like a person on their phone, not a brand. British English.
 - NEVER name gear, software or tracking systems. Talk about what a shoot looks like, never the kit.
@@ -76,6 +89,8 @@ export interface DmProspect {
   why_fit: string | null;
   contact_name: string | null;
   track: string;
+  /** 'instagram' = they engaged with vedri.studio; anything else = cold. */
+  origin: string;
 }
 
 export async function generateDm(p: DmProspect, kind: 'intro' | 'follow_up'): Promise<string> {
@@ -89,9 +104,12 @@ export async function generateDm(p: DmProspect, kind: 'intro' | 'follow_up'): Pr
     .filter(Boolean)
     .join('\n');
 
+  const engaged = p.origin === 'instagram';
   const ask =
     kind === 'intro'
-      ? 'Write the FIRST DM: light thanks for the engagement, half a sentence on what we do, one genuine question about their work.'
+      ? engaged
+        ? 'They engaged with vedri.studio on Instagram (a follow, like or comment). Write the FIRST DM: light thanks for the engagement, half a sentence on what we do, one genuine question about their work.'
+        : 'COLD first DM — they have NOT interacted with us on Instagram; never imply a follow, like or prior contact. Open with something specific and genuine about their work (use what we know), half a sentence on who we are, one easy question.'
       : 'Write a FOLLOW-UP DM (they did not reply to the first one, sent days ago). Do NOT guilt or "just checking in" — offer one new, specific thought or genuinely useful angle, and make it effortless to ignore or answer.';
 
   let user = `${who}\n\n${ask}`;
@@ -126,7 +144,7 @@ export async function sweepDueDms(asOf: Date = new Date()): Promise<DmSweepSumma
   const cutoff = new Date(asOf.getTime() - DM_FOLLOW_UP_DAYS * 86_400_000).toISOString();
   const rows = db()
     .prepare(
-      `SELECT id, company, category, location, why_fit, contact_name, track, ig_dm_count FROM prospects
+      `SELECT id, company, category, location, why_fit, contact_name, track, origin, ig_dm_count FROM prospects
        WHERE ig_dm_status = 'sent' AND ig_dm_sent_at <= ?`,
     )
     .all(cutoff) as (DmProspect & { ig_dm_count: number })[];

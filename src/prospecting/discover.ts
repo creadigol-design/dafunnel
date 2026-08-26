@@ -21,6 +21,7 @@ import { queueAlert } from '../alerts/queue.js';
 import { completeWithWebSearch } from '../anthropic.js';
 import { FREEMAIL_DOMAINS, extractDomain } from '../ingest/normalise.js';
 import { enrichCandidates } from './enrich.js';
+import { normaliseIgHandle } from './dm.js';
 
 const plog = log.child('prospector');
 
@@ -42,6 +43,8 @@ export interface ProspectCandidate {
   contactName: string | null;
   contactEmail: string | null;
   contactPageUrl: string | null;
+  /** Their Instagram handle, only when found published. Enables the DM assist. */
+  igHandle: string | null;
 }
 
 /** Normalise a URL or bare domain to a comparable registrable-host form. */
@@ -110,7 +113,7 @@ Do NOT include any company whose domain is in this list (already known to us):
 ${avoid.join(', ') || '(none yet)'}
 
 For each candidate return:
-{"company": "...", "website": "https://...", "location": "town/city", "category": "prodco|agency|post house|brand studio|other", "track": "Studio|VFX|Both", "whyFit": "one sentence, max 30 words, grounded in what you actually found", "evidenceUrl": "https://... (the page that backs whyFit)", "contactName": null, "contactEmail": null, "contactPageUrl": "https://... or null"}
+{"company": "...", "website": "https://...", "location": "town/city", "category": "prodco|agency|post house|brand studio|other", "track": "Studio|VFX|Both", "whyFit": "one sentence, max 30 words, grounded in what you actually found", "evidenceUrl": "https://... (the page that backs whyFit)", "contactName": null, "contactEmail": null, "contactPageUrl": "https://... or null", "instagramHandle": "their Instagram handle ONLY if you actually saw it published (site footer, directory, search results) — never guessed; else null"}
 
 Return the JSON array only.`;
 }
@@ -170,6 +173,7 @@ export function parseCandidates(text: string): ProspectCandidate[] {
       contactName: str(raw.contactName),
       contactEmail: contactEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) ? contactEmail : null,
       contactPageUrl: str(raw.contactPageUrl),
+      igHandle: normaliseIgHandle(str(raw.instagramHandle)),
     });
   }
   return out;
@@ -235,12 +239,12 @@ export async function runProspector(asOf: Date = new Date(), force = false): Pro
     conn
       .prepare(
         `INSERT INTO prospects (id, company, website, domain, location, category, track, why_fit,
-           evidence_url, contact_name, contact_email, contact_page_url, status, discovered_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?)`,
+           evidence_url, contact_name, contact_email, contact_page_url, ig_handle, status, discovered_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?)`,
       )
       .run(
         id, c.company, c.website, c.domain, c.location, c.category, c.track, c.whyFit,
-        c.evidenceUrl, c.contactName, c.contactEmail, c.contactPageUrl, now, now, now,
+        c.evidenceUrl, c.contactName, c.contactEmail, c.contactPageUrl, c.igHandle, now, now, now,
       );
     if (c.domain) known.add(c.domain); // dedupe within the batch too
     recordEvent({

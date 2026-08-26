@@ -12,7 +12,7 @@
  * in a single transaction.
  */
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /** Ordered migrations. Index+1 is the version each statement block moves TO. */
 export const MIGRATIONS: string[] = [
@@ -186,5 +186,12 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE prospects ADD COLUMN ig_dm_status TEXT NOT NULL DEFAULT 'none';
   ALTER TABLE prospects ADD COLUMN ig_dm_sent_at TEXT;
   ALTER TABLE prospects ADD COLUMN ig_dm_count INTEGER NOT NULL DEFAULT 0;
+  `,
+
+  // ── v6: discovered Instagram handles — published ones only, never guessed ─
+  // Set by discovery/enrichment when a prospect's Instagram is found on public
+  // pages. Any prospect with a handle gets the DM assist, both tracks.
+  `
+  ALTER TABLE prospects ADD COLUMN ig_handle TEXT;
   `,
 ];
